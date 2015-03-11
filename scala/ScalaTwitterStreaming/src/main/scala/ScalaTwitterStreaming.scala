@@ -2,11 +2,13 @@ import org.apache.spark.streaming.{Seconds, StreamingContext}
 import StreamingContext._
 import org.apache.spark.SparkContext._
 import org.apache.spark.streaming.twitter._
+import org.apache.spark.streaming.twitter
 import org.apache.spark.SparkConf
 import org.apache.spark.streaming.StreamingContext._
 
 import org.apache.spark.streaming.Seconds
 import org.apache.spark.streaming.StreamingContext
+import org.apache.spark.streaming.twitter.TwitterUtils
 
 import twitter4j.TwitterFactory
 import twitter4j.auth.AccessToken
