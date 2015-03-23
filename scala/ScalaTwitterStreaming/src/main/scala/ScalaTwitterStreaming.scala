@@ -32,7 +32,7 @@ object ScalaTwitterStreaming {
     System.setProperty("twitter4j.oauth.accessToken", "237197078-6zwzHsuB3VY3psD5873hhU3KQ1lSVQlOXyBhDqpG")
     System.setProperty("twitter4j.oauth.accessTokenSecret", "UIMZ1aD06DObpKI741zC8wHZF8jkj1bh02Lqfl5cQ76Pl")
 
-    val sparkConf = new SparkConf().setMaster("local[4]").setAppName("ScalaTwitterStreaming")
+    val sparkConf = new SparkConf().setMaster("local[2]").setAppName("ScalaTwitterStreaming")
     val ssc = new StreamingContext(sparkConf, Seconds(10))
     val stream = TwitterUtils.createStream(ssc, None)
 
