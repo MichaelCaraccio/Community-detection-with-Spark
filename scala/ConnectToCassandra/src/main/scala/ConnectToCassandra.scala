@@ -77,7 +77,7 @@ object ConnectToCassandra {
                         .set("spark.cassandra.connection.host", "cassandra-server") //Celle ligne est ajouté pour cassandra
         //val sc = new SparkContext(conf)
 
-        val databaseContext = new SparkContext("spark://cassandra-server:7077", "demo", sparkConf)  
+        //val databaseContext = new SparkContext("spark://cassandra-server:7077", "demo", sparkConf)  
         val ssc = new StreamingContext(sparkConf, Seconds(1))
         val stream = TwitterUtils.createStream(ssc, None)
 
@@ -91,6 +91,10 @@ object ConnectToCassandra {
             hashmap.put("create_at", new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssX").format(status.getCreatedAt))
             (status.getUser.getId.toString, hashmap)
         })
+        
+        //val rdd = ssc.cassandraTable("demo", "key_value").select("key", "value")
+        //println(rdd)
+
 
         tweets.foreachRDD(rdd => {
             rdd.foreach {r => {
