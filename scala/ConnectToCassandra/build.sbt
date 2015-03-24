@@ -1,4 +1,4 @@
-name := "ScalaTwitterStreaming"
+name := "ConnectToCassandra"
 
 version := "1.0"
 
@@ -7,7 +7,7 @@ scalaVersion := "2.10.4"
 libraryDependencies ++= Seq(
   "org.apache.spark" %% "spark-core"              % "1.3.0" % "provided",
   "org.apache.spark" %% "spark-streaming"         % "1.3.0" % "provided",
-  "org.apache.spark" %% "spark-streaming-twitter" % "1.2.1")
+  "org.apache.spark" %% "spark-streaming-twitter" % "1.2.0")
 
 libraryDependencies += "org.twitter4j" % "twitter4j-stream" % "3.0.3"
 
