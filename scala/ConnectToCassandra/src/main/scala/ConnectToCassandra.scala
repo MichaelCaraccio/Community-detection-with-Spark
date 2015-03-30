@@ -19,6 +19,9 @@ import org.apache.log4j.Level
 
 import com.datastax.spark.connector._ 
 import com.datastax.spark.connector.streaming._
+import com.datastax.spark.connector.cql.CassandraConnector
+
+import org.apache.spark.rdd.RDD
 
 /**
  * Calculates popular hashtags (topics) over sliding 10 and 60 second windows from a Twitter
@@ -60,8 +63,8 @@ object ConnectToCassandra {
     def main(args: Array[String]) {
 
         // Suppression des messages INFO
-        Logger.getLogger("org").setLevel(Level.WARN)
-        Logger.getLogger("akka").setLevel(Level.WARN)
+        //Logger.getLogger("org").setLevel(Level.WARN)
+        //Logger.getLogger("akka").setLevel(Level.WARN)
 
         val filters = args
         // Set the system properties so that Twitter4j library used by twitter stream
@@ -74,7 +77,10 @@ object ConnectToCassandra {
         val sparkConf = new SparkConf(true)
                         .setMaster("local[4]")
                         .setAppName("ConnectToCassandra")
-                        .set("spark.cassandra.connection.host", "cassandra-server") //Celle ligne est ajouté pour cassandra
+                        .set("spark.cassandra.connection.host", "127.0.0.1") //Celle ligne est ajouté pour cassandra
+                        //.set("spark.cassandra.auth.username", "cassandra")
+                        //.set("spark.cassandra.auth.password", "cassandra")
+                        //.set("spark.cassandra.connection.native.port", "7077")
         //val sc = new SparkContext(conf)
 
         //val databaseContext = new SparkContext("spark://cassandra-server:7077", "demo", sparkConf)  
@@ -92,8 +98,25 @@ object ConnectToCassandra {
             (status.getUser.getId.toString, hashmap)
         })
         
-        //val rdd = ssc.cassandraTable("demo", "key_value").select("key", "value")
-        //println(rdd)
+        //val rdd = ssc.cassandraTable("demo", "users").select("lastname").where("lastname = ?", "Doe")
+        val rdd = ssc.cassandraTable("demo", "users")
+
+        //val rdd = ssc.cassandraTable("demo", "users").toArray
+        
+        //case class Person(lastname: String, age: Int,city: String,email: String,firstname: String)
+        //ssc.cassandraTable[Person]("demo", "users").registerAsTable("users")
+        //val adults = ssc.sql("SELECT * FROM users")
+        println("-------")
+        println(rdd)
+        rdd.toArray.foreach(println)
+        //rdd.toArray().foreach(println)
+        //rdd.toArray.foreach(println)
+        println("-------")
+        //println(adults)
+        println("-------")
+        
+        // DEMAIN ESSAYER LIEN CI_DESSOUS
+        // http://formacionhadoop.com/aulavirtual/mod/forum/discuss.php?d=23
 
 
         tweets.foreachRDD(rdd => {
