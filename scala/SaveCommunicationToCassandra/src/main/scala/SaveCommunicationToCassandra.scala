@@ -23,6 +23,7 @@ import collection.JavaConversions._
 import org.apache.log4j.Logger
 import org.apache.log4j.Level
 
+// Enable Cassandra-specific functions on the StreamingContext, DStream and RDD:
 import com.datastax.spark.connector._ 
 import com.datastax.spark.connector.streaming._
 
@@ -134,6 +135,11 @@ object SaveCommunicationToCassandra {
                                                  }
                                                 )}
         
+        
+        
+        val query = ssc.cassandraTable("twitter", "users_communicate").select("user_dest_name", "user_send_id").where("tweet_id = ?", "594922428473671681")
+        query.collect.foreach(println)
+        println("swag")
         // Save user's informations in Cassandra
         usersStream.foreachRDD(rdd => {
             //rdd.saveToCassandra("twitter", "user_filtered", SomeColumns("user_id", "user_name", "user_lang", "user_follower_count", "user_friends_count", "user_screen_name", "user_status_count"))
@@ -160,7 +166,11 @@ object SaveCommunicationToCassandra {
             }*/
             //val parsedData = rdd.mapValues(_.toList)
             //con(parsedData)
-            rdd.saveToCassandra("twitter", "users_communicate", SomeColumns("tweet_id","user_send_id","user_send_name","user_dest_name"))
+            
+            
+            //rdd.saveToCassandra("twitter", "users_communicate", SomeColumns("tweet_id","user_send_id","user_send_name","user_dest_name"))
+            
+            
             rdd.foreach {r => {
                 
                 println(r)
