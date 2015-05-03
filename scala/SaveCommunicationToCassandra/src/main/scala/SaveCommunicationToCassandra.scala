@@ -27,6 +27,7 @@ import com.datastax.spark.connector._
 import com.datastax.spark.connector.streaming._
 
 import scala.util.matching.Regex
+import org.apache.spark.rdd.RDD
 
 
 // Useful links
@@ -62,7 +63,7 @@ object SaveCommunicationToCassandra {
         twitterstream.setOAuthAccessToken(new AccessToken("237197078-6zwzHsuB3VY3psD5873hhU3KQ1lSVQlOXyBhDqpG", "UIMZ1aD06DObpKI741zC8wHZF8jkj1bh02Lqfl5cQ76Pl"))
         System.setProperty("twitter4j.http.retryCount", "3");
         System.setProperty("twitter4j.http.retryIntervalSecs", "10")
-        System.setProperty("twitter4j.async.numThreads", "1");
+        System.setProperty("twitter4j.async.numThreads", "10");
 
         val ssc = new StreamingContext(sparkConf, Seconds(1))
         val stream = TwitterUtils.createStream(ssc, Option(twitterstream.getAuthorization()), words)
@@ -80,6 +81,19 @@ object SaveCommunicationToCassandra {
                                                 status.getUser.getFriendsCount.toString,
                                                 status.getUser.getScreenName,
                                                 status.getUser.getStatusesCount.toString)}
+        
+        // Stream about users
+        val commStream = stream.map{status => (status.getId.toString, 
+                                                status.getUser.getId.toString, 
+                                                status.getUser.getName.toString,
+                                                if(pattern.findFirstIn(status.getText).isEmpty){
+                                                        ""
+                                                    }
+                                                    else
+                                                    {
+                                                        pattern.findFirstIn(status.getText).getOrElse("@MichaelCaraccio").tail
+                                                    }
+                                              )}
 
         // Stream about tweets
         val tweetsStream = stream.map{status => (status.getId.toString, 
@@ -92,15 +106,15 @@ object SaveCommunicationToCassandra {
                                                     }
                                                     else
                                                     {
-                                                        twitterstream.showUser(pattern.findFirstIn(status.getText).getOrElse("@MichaelCaraccio").tail).getName
+                                                        pattern.findFirstIn(status.getText).getOrElse("@MichaelCaraccio").tail
                                                     },
 
-                                                    if(pattern.findFirstIn(status.getText).isEmpty){
+                                                   /* if(pattern.findFirstIn(status.getText).isEmpty){
                                                         ""
                                                     }
                                                     else{
                                                         twitterstream.showUser(pattern.findFirstIn(status.getText).getOrElse("@MichaelCaraccio").tail).getId
-                                                    },
+                                                    },*/
 
                                                  status.getRetweetCount.toString,
                                                  new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss").format(status.getCreatedAt),
@@ -126,6 +140,52 @@ object SaveCommunicationToCassandra {
             println("user added")
         })
 
+        
+        commStream.foreachRDD(rdd => {
+                
+            //var dest_name = "test"
+            //val r3 = rdd.filter(_._2 != 0)
+            println(rdd.count())
+            /*if (rdd.toArray.length > 0){
+                val rrrr = rdd.toList
+                val dest = rrrr(0)
+                
+
+                //println(r3)
+                println("ici " + rrrr)
+                println("la "+ dest)
+            }
+            else{
+                //println("pas trouvé")
+            }*/
+            //val parsedData = rdd.mapValues(_.toList)
+            //con(parsedData)
+            rdd.saveToCassandra("twitter", "users_communicate", SomeColumns("tweet_id","user_send_id","user_send_name","user_dest_name"))
+            rdd.foreach {r => {
+                
+                println(r)
+                //if (r._3 != ""){
+                    //con(r._3,rdd)
+                //}
+                //val con = r._3
+                //println(r._3)
+                //println(r._1)
+                //if (r._3 != ""){
+                
+                //}
+                }}
+            
+            println("_________---_____---_____---___")
+            //println(rdd.take(1))
+            /*if(rdd.take(3) != ""){
+                rdd.saveToCassandra("twitter", "users_communicate", SomeColumns("tweet_id","user_send_id","user_send_name","user_dest_name"))
+            }*/
+            //println("comm added")
+            println("_________---_____---_____---___")
+
+            
+        })
+        
         // Save tweet's informations in Cassandra
         tweetsStream.foreachRDD(rdd => {
             //rdd.saveToCassandra("twitter", "tweet_filtered", SomeColumns("tweet_id", "user_id", "tweet_text", "tweet_retweet", "tweet_create_at", "user_longitude", "user_latitude"))
@@ -148,22 +208,28 @@ object SaveCommunicationToCassandra {
                 println("DAT BITCH2" + reply)
             }}*/
             
-            
+            //val pairs = rdd.map(_._1, _._5)
+            //val cache = collection.mutable.Map[String, String] = Map(id -> 'iddd')
             
             rdd.foreach {r => {
+                val tweet_id = r._1
                 val sender_name = r._3
                 val sender_id = r._2
                 val tweet_text = r._4
                 val dest_name = r._5               
-                val dest_id = r._6
+                //val dest_id = r._6
+                
+                //val collection = Seq((tweet_id,dest_name,sender_id,sender_name))
+                
+                //collection.saveToCassandra("twitter", "users_communicate", SomeColumns("tweet_id","user_dest_name","user_send_id","user_send_name"))
 
-                println("----------------------------------------------")
+                /*println("----------------------------------------------")
                 println("Sender ID : " + sender_id)
                 println("Sender Name : " + sender_name)
                 println("Tweet : " + tweet_text)
                 println("Dest name :" + dest_name)
-                println("Dest ID : " + dest_id)
-                println("----------------------------------------------")
+                //println("Dest ID : " + dest_id)
+                println("----------------------------------------------")*/
 
             }}
             println("tweet added")
@@ -172,4 +238,26 @@ object SaveCommunicationToCassandra {
         ssc.start()
         ssc.awaitTermination()
     }
+    
+    //def con(rdd: RDD[(String, String, String, String)]) : String = {
+        /*println(rdd.(0))
+        //return "con"
+        
+        val con = rdd.toArray
+        con.foreach {r => {
+                
+                println(rdd)
+                if (r._3 != ""){
+                    return "lol"
+                }
+            return "pas lol"
+                //val con = r._3
+                //println(r._3)
+                //println(r._1)
+                //if (r._3 != ""){
+                
+                //}
+                }}*/
+        //rdd.saveToCassandra("twitter", "users_communicate", SomeColumns("tweet_id","user_send_id","user_send_name","user_dest_name"))
+   // }
 }
