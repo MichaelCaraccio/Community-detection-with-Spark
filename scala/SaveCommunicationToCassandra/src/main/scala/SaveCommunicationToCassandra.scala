@@ -109,7 +109,8 @@ object SaveCommunicationToCassandra extends Serializable{
                                                 else
                                                 {
                                                     pattern.findFirstIn(status.getText).getOrElse("@MichaelCaraccio").tail
-                                                }
+                                                },
+                                               status.getText
                                             )}
         
         
@@ -176,18 +177,38 @@ object SaveCommunicationToCassandra extends Serializable{
             // RDD -> Array()
             var tabValues = rdd.collect()
             
+            
+            var item = 0
+            
             for(item <- tabValues.toArray) {
-                println(item);
+                //println(item);
                 
                 // Avoid single @ in message
                 if(item._4 != ""){
-                    currentContext.parallelize(Seq(item)).saveToCassandra("twitter", 
-                                                                "users_communicate",
-                                                                SomeColumns(
-                                                                   "tweet_id",
+                    
+                    // Find multiple dest
+                    val matches = pattern.findAllIn(item._5).toArray
+
+                    println(matches.length)
+                    
+                    var destName = ""
+                    matches.foreach{r => {
+                        destName = r
+                        
+                        println(item)
+                        println(item._1, item._2,item._3,destName)
+
+                        val collection = currentContext.parallelize(Seq((item._1, item._2,item._3,destName)))
+                        collection.saveToCassandra("twitter", "users_communicate",SomeColumns("tweet_id","user_send_id","user_send_name","user_dest_name"))
+                        
+                    }}
+
+                    
+                    
+                    /*currentContext.parallelize(Array("sss","aaa","fdsfd","dsa","sads")).saveToCassandra("twitter", "users_communicate",SomeColumns("tweet_id",
                                                                    "user_send_id",
                                                                    "user_send_name",
-                                                                   "user_dest_name"))
+                                                                   "user_dest_name"))*/
                 }
                 else{
                     println("Pas accepter")
