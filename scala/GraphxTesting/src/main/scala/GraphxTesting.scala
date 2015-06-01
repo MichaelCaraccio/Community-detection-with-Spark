@@ -2,12 +2,8 @@ import org.apache.spark.SparkContext
 import org.apache.spark.SparkContext._
 import org.apache.spark.SparkConf
 
-import collection.JavaConversions._
-
 import org.apache.log4j.Logger
 import org.apache.log4j.Level
-
-import scala.util.matching.Regex
 
 import org.apache.spark.graphx._
 // To make some of the examples work we will also need RDD
@@ -39,8 +35,7 @@ object GraphxTesting{
 
         val sc = new SparkContext(sparkConf)
         
-        // Resulting graph
-        val userGraph: Graph[(String, String), String]
+        case class User(name: String, inDeg: Int, outDeg: Int)
         
         // Create an RDD for the vertices
         val users: RDD[(VertexId, (String))] = 
@@ -98,12 +93,39 @@ object GraphxTesting{
         // Build the initial Graph
         val graph = Graph(users, relationships, defaultUser)
         
-        val facts: RDD[String] =
-		graph.triplets.map(triplet =>
-		triplet.srcAttr._1 + " is the " + triplet.attr + " of " + triplet.dstAttr._1)
-		facts.collect.foreach(println(_))
-		
-	}
         
-    }
+        // See who communicates with who
+        println("\n\nUsers communications: ")
+        val facts: RDD[String] = graph.triplets.map(triplet =>  triplet.srcAttr + " communicate with " + 
+                                                                triplet.dstAttr + " with tweet id " + 
+                                                                triplet.attr) 
+        facts.collect.foreach(println(_))
+        
+        
+        // Find user
+        /*graph.vertices.filter { case (id, (name)) => name == "Michael" }.collect.foreach {
+            case (id, (name)) => println(s"$id is $name")
+        }*/
+        
+        // Create a user Graph
+        val initialUserGraph: Graph[User, String] = graph.mapVertices {
+            case (id, (name)) => User(name, 0, 0)
+        }
+        
+        // Fill in the degree information (out and in degrees)
+        val userGraph = initialUserGraph.outerJoinVertices(initialUserGraph.inDegrees) {
+            case (id, u, inDegOpt) => User(u.name, inDegOpt.getOrElse(0), u.outDeg)
+        }.outerJoinVertices(initialUserGraph.outDegrees) {
+            case (id, u, outDegOpt) => User(u.name, u.inDeg, outDegOpt.getOrElse(0))
+        }
+        
+        // Display the userGraph    
+        println("\n\nUsers out and in degrees: ")
+        userGraph.vertices.foreach { 
+            case (id, u) => println(s"User $id is called ${u.name} and received ${u.inDeg} tweets and send ${u.outDeg}.")
+        }
+        
+
+        // Who communicate 
+	}
 }
