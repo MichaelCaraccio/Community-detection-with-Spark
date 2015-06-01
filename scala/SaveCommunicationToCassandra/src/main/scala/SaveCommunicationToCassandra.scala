@@ -40,7 +40,7 @@ object SaveCommunicationToCassandra{
     
     def main(args: Array[String]) {
         
-        // Display only warning messages
+        // Display only warning and infos messages
         //Logger.getLogger("org").setLevel(Level.ERROR)
         //Logger.getLogger("akka").setLevel(Level.ERROR)
         
@@ -48,8 +48,6 @@ object SaveCommunicationToCassandra{
         Logger.getLogger("org").setLevel(Level.OFF)
         Logger.getLogger("akka").setLevel(Level.OFF)
         
-        val filters = args
-
         // Spark configuration
         val sparkConf = new SparkConf(true)
         .setMaster("local[4]")
