@@ -44,21 +44,29 @@ object GraphxTesting{
         // See who communicates with who
         displayAllCommunications(graph)
 
-        
+        // Let's find user id
         val id = findUserIDWithName(graph, "Michael")
         println("ID for user Michael : " + id.toString)
-        
+
+        // Find username with user ID
         val name = findUserNameWithID(graph, 1)
         println("Name for id 1: " + name.toString)
 
 
-        case class User(name: String, inDeg: Int, outDeg: Int)
+        // Create User class
+        case class User(name: String, // Username
+                        inDeg: Int,   // Received tweets
+                        outDeg: Int)  // Sent tweets
 
-        // Create a user Graph
+        // Create user Graph
+        // def mapVertices[VD2](map: (VertexID, VD) => VD2): Graph[VD2, ED]
         val initialUserGraph: Graph[User, String] = graph.mapVertices {
             case (id, (name)) => User(name, 0, 0)
         }
-        
+
+        initialUserGraph.edges.collect.foreach(println(_))
+
+
         // Fill in the degree informations (out and in degrees)
         val userGraph = initialUserGraph.outerJoinVertices(initialUserGraph.inDegrees) {
             case (id, u, inDegOpt) => User(u.name, inDegOpt.getOrElse(0), u.outDeg)
@@ -73,8 +81,61 @@ object GraphxTesting{
         }
         
         println(graph.numEdges)
-        // Who communicate 
-	}
+
+        /**
+         * StronglyConnectedComponents
+         *
+         * Compute the strongly connected component (SCC) of each vertex and return a graph with the
+         * vertex value containing the lowest vertex id in the SCC containing that vertex.
+         */
+
+        val sccGraph = graph.stronglyConnectedComponents(5)
+        users.join(sccGraph.vertices).foreach(println)
+
+        val nameOf = relationships.collect.foreach (println)
+
+
+        sccGraph.vertices.map {
+          case (member, leader) => s"$member is in the group of $leader's edge"
+        }.collect.foreach(println)
+
+        //println(sccGraph)
+        /*sccGraph.edges.collect.foreach(println(_))
+        sccGraph.edges.count
+
+        sccGraph.vertices.collect.foreach(println(_))
+        sccGraph.vertices.count*/
+
+
+        /**
+         * ConnectedComponents
+         *
+         * Compute the connected component membership of each vertex and return a graph with the vertex
+         * value containing the lowest vertex id in the connected component containing that vertex.
+         *
+         * @see [[org.apache.spark.graphx.lib.ConnectedComponents$#run]]
+         */
+
+
+
+        /**
+         * TriangleCount
+         *
+         * Compute the number of triangles passing through each vertex.
+         *
+         * @see [[org.apache.spark.graphx.lib.TriangleCount$#run]]
+         */
+
+
+        /**
+         * PageRank
+         *
+         * Run PageRank for a fixed number of iterations returning a graph with vertex attributes
+         * containing the PageRank and edge attributes the normalized edge weight.
+         *
+         * @see [[org.apache.spark.graphx.lib.PageRank$#run]]
+         */
+    }
 
 
     /**
@@ -86,7 +147,7 @@ object GraphxTesting{
      */
     def initGraph(sc:SparkContext): (RDD[(VertexId, (String))], RDD[Edge[String]], String) ={
 
-      println("Call : initGraph")
+      println("Call : initGraph\n")
 
       // Create an RDD for the vertices
       val users: RDD[(VertexId, (String))] =
@@ -175,7 +236,7 @@ object GraphxTesting{
     }
 
     /**
-     * @constructor display all communication between users
+     * @constructor display all communications between users
      * @param Graph[String,String] $graph - Graph element
      * @return Unit
      */
