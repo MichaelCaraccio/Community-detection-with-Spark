@@ -34,81 +34,26 @@ object GraphxTesting{
         .set("spark.cassandra.connection.host", "127.0.0.1") // Link to Cassandra
 
         val sc = new SparkContext(sparkConf)
-        
-        case class User(name: String, inDeg: Int, outDeg: Int)
-        
-        // Create an RDD for the vertices
-        val users: RDD[(VertexId, (String))] = 
-            sc.parallelize(Array((1L, "Michael"),
-                                 (2L, "David"),
-                                 (3L, "Sarah"),
-                                 (4L, "Jean"),
-                                 (5L, "Raphael"),
-                                 (6L, "Lucie"),
-                                 (7L, "Harold"),
-                                 (8L, "Pierre"),
-                                 (9L, "Christophe"),
-                                 (10L, "Zoe")
-                                ))
-        
-        // Create an RDD for edges
-        val relationships: RDD[Edge[String]] =
-            sc.parallelize(Array(Edge(1L, 2L, "1"),
-                                 Edge(1L, 7L, "2"),
-                                 Edge(1L, 6L, "3"),
-                                 Edge(6L, 1L, "4"),
-                                 Edge(7L, 8L, "5"),
-                                 Edge(7L, 2L, "6"),
-                                 Edge(2L, 10L, "7"),
-                                 Edge(10L, 2L, "8"),
-                                 Edge(10L, 3L, "9"),
-                                 Edge(9L, 7L, "10"),
-                                 Edge(9L, 6L, "11"),
-                                 Edge(9L, 5L, "12"),
-                                 Edge(5L, 9L, "13"),
-                                 Edge(4L, 9L, "14"),
-                                 Edge(8L, 7L, "15"),
-                                 Edge(9L, 7L, "16"),
-                                 Edge(6L, 1L, "17"),
-                                 Edge(4L, 9L, "18"),
-                                 Edge(7L, 9L, "19"),
-                                 Edge(7L, 8L, "20"),
-                                 Edge(7L, 8L, "21"),
-                                 Edge(8L, 7L, "22"),
-                                 Edge(8L, 7L, "23"),
-                                 Edge(1L, 2L, "24"),
-                                 Edge(7L, 2L, "25"),
-                                 Edge(2L, 7L, "26"),
-                                 Edge(2L, 7L, "27"),
-                                 Edge(2L, 7L, "28"),
-                                 Edge(6L, 1L, "29"),
-                                 Edge(6L, 1L, "30"),
-                                 Edge(1L, 7L, "31"), 
-                                 Edge(1L, 7L, "32")
-                                ))
-        
-        // Define a default user in case there are relationship with missing user
-        val defaultUser = "John Doe"
+
+        // Create Vertices and Edges
+        val(users, relationships, defaultUser) = initGraph(sc)
         
         // Build the initial Graph
         val graph = Graph(users, relationships, defaultUser)
-        
-        
+
         // See who communicates with who
         displayAllCommunications(graph)
-        
-        
-        // Find user
-        /*graph.vertices.filter { case (id, (name)) => name == "Michael" }.collect.foreach {
-            case (id, (name)) => println(s"$id is $name")
-        }*/
+
         
         val id = findUserIDWithName(graph, "Michael")
-        println("\nID for user Michael : " + id.toString)
+        println("ID for user Michael : " + id.toString)
         
         val name = findUserNameWithID(graph, 1)
-        println("\nName for id 1: " + name.toString)
-        
+        println("Name for id 1: " + name.toString)
+
+
+        case class User(name: String, inDeg: Int, outDeg: Int)
+
         // Create a user Graph
         val initialUserGraph: Graph[User, String] = graph.mapVertices {
             case (id, (name)) => User(name, 0, 0)
@@ -130,6 +75,74 @@ object GraphxTesting{
         println(graph.numEdges)
         // Who communicate 
 	}
+
+
+    /**
+     * @constructor init data - construct graph and populate it
+     * @param SparkContext $sc - Sparkcontext
+     * @return RDD[(VertexId, (String))] - users (Vertices)
+     *         RDD[Edge[String]] - relationship (Edges)
+     *         String - default user
+     */
+    def initGraph(sc:SparkContext): (RDD[(VertexId, (String))], RDD[Edge[String]], String) ={
+
+      println("Call : initGraph")
+
+      // Create an RDD for the vertices
+      val users: RDD[(VertexId, (String))] =
+        sc.parallelize(Array((1L, "Michael"),
+          (2L, "David"),
+          (3L, "Sarah"),
+          (4L, "Jean"),
+          (5L, "Raphael"),
+          (6L, "Lucie"),
+          (7L, "Harold"),
+          (8L, "Pierre"),
+          (9L, "Christophe"),
+          (10L, "Zoe")
+        ))
+
+      // Create an RDD for edges
+      val relationships: RDD[Edge[String]] =
+        sc.parallelize(Array(Edge(1L, 2L, "1"),
+          Edge(1L, 7L, "2"),
+          Edge(1L, 6L, "3"),
+          Edge(6L, 1L, "4"),
+          Edge(7L, 8L, "5"),
+          Edge(7L, 2L, "6"),
+          Edge(2L, 10L, "7"),
+          Edge(10L, 2L, "8"),
+          Edge(10L, 3L, "9"),
+          Edge(9L, 7L, "10"),
+          Edge(9L, 6L, "11"),
+          Edge(9L, 5L, "12"),
+          Edge(5L, 9L, "13"),
+          Edge(4L, 9L, "14"),
+          Edge(8L, 7L, "15"),
+          Edge(9L, 7L, "16"),
+          Edge(6L, 1L, "17"),
+          Edge(4L, 9L, "18"),
+          Edge(7L, 9L, "19"),
+          Edge(7L, 8L, "20"),
+          Edge(7L, 8L, "21"),
+          Edge(8L, 7L, "22"),
+          Edge(8L, 7L, "23"),
+          Edge(1L, 2L, "24"),
+          Edge(7L, 2L, "25"),
+          Edge(2L, 7L, "26"),
+          Edge(2L, 7L, "27"),
+          Edge(2L, 7L, "28"),
+          Edge(6L, 1L, "29"),
+          Edge(6L, 1L, "30"),
+          Edge(1L, 7L, "31"),
+          Edge(1L, 7L, "32")
+        ))
+
+      // Define a default user in case there are relationship with missing user
+      val defaultUser = "John Doe"
+
+      (users, relationships, defaultUser)
+    }
 
     /**
     * @constructor find user ID with username
@@ -159,14 +172,6 @@ object GraphxTesting{
             (e: (org.apache.spark.graphx.VertexId, String)) => return e._1.toString
         }
         "0"
-        
-        // Avec des class case
-        /*
-            graph.vertices.filter{ case (id, (name)) => name == "Michael" }.collect.foreach{
-                case (id, (name)) => return id.toString
-            }
-            "0"
-        */
     }
 
     /**
@@ -177,11 +182,11 @@ object GraphxTesting{
     def displayAllCommunications(graph:Graph[String,String]): Unit ={
 
       println("Call : displayAllCommunications")
-      println("\nUsers communications: ")
+      println("Users communications: ")
+
       val facts: RDD[String] = graph.triplets.map(triplet =>  triplet.srcAttr + " communicate with " +
         triplet.dstAttr + " with tweet id " + triplet.attr)
 
       facts.collect.foreach(println(_))
-
     }
 }
