@@ -39,16 +39,16 @@ object GraphxTesting{
         
         // Create an RDD for the vertices
         val users: RDD[(VertexId, (String))] = 
-            sc.parallelize(Array((1L, ("Michael")), 
-                                 (2L, ("David")),
-                                 (3L, ("Sarah")),
-                                 (4L, ("Jean")),
-                                 (5L, ("Raphael")),
-                                 (6L, ("Lucie")),
-                                 (7L, ("Harold")),
-                                 (8L, ("Pierre")),
-                                 (9L, ("Christophe")),
-                                 (10L, ("Zoe"))
+            sc.parallelize(Array((1L, "Michael"),
+                                 (2L, "David"),
+                                 (3L, "Sarah"),
+                                 (4L, "Jean"),
+                                 (5L, "Raphael"),
+                                 (6L, "Lucie"),
+                                 (7L, "Harold"),
+                                 (8L, "Pierre"),
+                                 (9L, "Christophe"),
+                                 (10L, "Zoe")
                                 ))
         
         // Create an RDD for edges
@@ -88,18 +88,14 @@ object GraphxTesting{
                                 ))
         
         // Define a default user in case there are relationship with missing user
-        val defaultUser = ("John Doe")
+        val defaultUser = "John Doe"
         
         // Build the initial Graph
         val graph = Graph(users, relationships, defaultUser)
         
         
         // See who communicates with who
-        println("\n\nUsers communications: ")
-        val facts: RDD[String] = graph.triplets.map(triplet =>  triplet.srcAttr + " communicate with " + 
-                                                                triplet.dstAttr + " with tweet id " + 
-                                                                triplet.attr) 
-        facts.collect.foreach(println(_))
+        displayAllCommunications(graph)
         
         
         // Find user
@@ -107,12 +103,18 @@ object GraphxTesting{
             case (id, (name)) => println(s"$id is $name")
         }*/
         
+        val id = findUserIDWithName(graph, "Michael")
+        println("\nID for user Michael : " + id.toString)
+        
+        val name = findUserNameWithID(graph, 1)
+        println("\nName for id 1: " + name.toString)
+        
         // Create a user Graph
         val initialUserGraph: Graph[User, String] = graph.mapVertices {
             case (id, (name)) => User(name, 0, 0)
         }
         
-        // Fill in the degree information (out and in degrees)
+        // Fill in the degree informations (out and in degrees)
         val userGraph = initialUserGraph.outerJoinVertices(initialUserGraph.inDegrees) {
             case (id, u, inDegOpt) => User(u.name, inDegOpt.getOrElse(0), u.outDeg)
         }.outerJoinVertices(initialUserGraph.outDegrees) {
@@ -125,7 +127,61 @@ object GraphxTesting{
             case (id, u) => println(s"User $id is called ${u.name} and received ${u.inDeg} tweets and send ${u.outDeg}.")
         }
         
-
+        println(graph.numEdges)
         // Who communicate 
 	}
+
+    /**
+    * @constructor find user ID with username
+    * @param Graph[String,String] $graph - Graph element
+    * @param Int $userID - User id
+    * @return String - if success : username | failure : "user not found"
+    */
+    def findUserNameWithID (graph:Graph[String,String], userID:Int) : String = {
+      println("Call : findUserNameWithID")
+
+      graph.vertices.filter{ case (id, name) => id == userID }.collect.foreach {
+            (e: (org.apache.spark.graphx.VertexId, String)) => return e._2
+        }
+        "user not found"
+    }
+
+    /**
+    * @constructor find username with id
+    * @param Graph[String,String] $graph - Graph element
+    * @param String $userName - Username
+    * @return String - if success : id found | failure : "0"
+    */
+    def findUserIDWithName(graph:Graph[String,String], userName:String) : String = {
+      println("Call : findUserIDWithName")
+
+      graph.vertices.filter( _._2 == "Michael" ).collect.foreach {
+            (e: (org.apache.spark.graphx.VertexId, String)) => return e._1.toString
+        }
+        "0"
+        
+        // Avec des class case
+        /*
+            graph.vertices.filter{ case (id, (name)) => name == "Michael" }.collect.foreach{
+                case (id, (name)) => return id.toString
+            }
+            "0"
+        */
+    }
+
+    /**
+     * @constructor display all communication between users
+     * @param Graph[String,String] $graph - Graph element
+     * @return Unit
+     */
+    def displayAllCommunications(graph:Graph[String,String]): Unit ={
+
+      println("Call : displayAllCommunications")
+      println("\nUsers communications: ")
+      val facts: RDD[String] = graph.triplets.map(triplet =>  triplet.srcAttr + " communicate with " +
+        triplet.dstAttr + " with tweet id " + triplet.attr)
+
+      facts.collect.foreach(println(_))
+
+    }
 }
