@@ -15,11 +15,18 @@ import org.apache.spark.rdd.RDD
 
 object GraphxTesting{
 
+    val RED = "\033[1;30m"
+    val ENDC = "\033[0m"
+
+    def color(str: String, col: String): String = "%s%s%s".format(col, str, ENDC)
+
     def main(args: Array[String]) {
 
         println("\n\n***************************************************")
         println("************       GraphxTesting      *************")
         println("***************************************************\n")
+
+
 
         // Display only warning and infos messages
         Logger.getLogger("org").setLevel(Level.ERROR)
@@ -78,15 +85,19 @@ object GraphxTesting{
         }
 
         // Display the userGraph    
-        println("\n\nUsers out and in degrees: ")
+        println(color("\nUsers out and in degrees: ", RED))
         userGraph.vertices.foreach {
             case (id, u) => println(s"User $id is called ${u.name} and received ${u.inDeg} tweets and send ${u.outDeg}.")
         }
 
+        // Call ConnectedComponents
+        time { cc(graph, users) }
+
         // Call StronglyConnectedComponents
-        time { ssc(graph, 5) }
+        time { scc(graph, 1) }
 
-
+        // Get PageRank
+        time { getPageRank(graph, users) }
 
 
         //println(sccGraph)
@@ -97,24 +108,7 @@ object GraphxTesting{
         sccGraph.vertices.count*/
 
 
-        /**
-         * ConnectedComponents
-         *
-         * Compute the connected component membership of each vertex and return a graph with the vertex
-         * value containing the lowest vertex id in the connected component containing that vertex.
-         *
-         * @see [[org.apache.spark.graphx.lib.ConnectedComponents$#run]]
-         */
 
-        // Find the connected components
-        val cc = graph.connectedComponents().vertices
-        // Join the connected components with the usernames
-
-        val ccByUsername = users.join(cc).map {
-            case (id, (username, cc)) => (username, cc)
-        }
-        // Print the result
-        println(ccByUsername.collect().mkString("\n"))
 
         /**
          * TriangleCount
@@ -125,14 +119,62 @@ object GraphxTesting{
          */
 
 
-        /**
-         * PageRank
-         *
-         * Run PageRank for a fixed number of iterations returning a graph with vertex attributes
-         * containing the PageRank and edge attributes the normalized edge weight.
-         *
-         * @see [[org.apache.spark.graphx.lib.PageRank$#run]]
-         */
+    }
+
+
+    /**
+     * @constructor getPageRank
+     *
+     * Run PageRank for a fixed number of iterations returning a graph with vertex attributes
+     * containing the PageRank and edge attributes the normalized edge weight.
+     *
+     * @param Graph[String,String] $graph - Graph element
+     * @param RDD[(VertexId, (String))] $users - Vertices
+     * @return Unit
+     *
+     * @see [[org.apache.spark.graphx.lib.PageRank$#run]]
+     */
+    def getPageRank(graph:Graph[String,String], users:RDD[(VertexId, (String))]): Unit ={
+
+        println(color("\nCall PageRank" , RED))
+
+        val ranks = graph.pageRank(0.00001).vertices
+
+        val ranksByUsername = users.join(ranks).map {
+            case (id, (username, rank)) => (id, username, rank)
+        }
+
+        // Print the result descending
+        println(ranksByUsername.collect().sortBy(_._3).reverse.mkString("\n"))
+    }
+
+    /**
+     * @constructor ConnectedComponents
+     *
+     * Compute the connected component membership of each vertex and return a graph with the vertex
+     * value containing the lowest vertex id in the connected component containing that vertex.
+     *
+     * @param Graph[String,String] $graph - Graph element
+     * @param RDD[(VertexId, (String))] $users - Vertices
+     * @return Unit
+     *
+     * @see [[org.apache.spark.graphx.lib.ConnectedComponents$#run]]
+     */
+    def cc(graph:Graph[String,String], users:RDD[(VertexId, (String))]): Unit ={
+        println(color("\nCall ConnectedComponents" , RED))
+
+        // Find the connected components
+        val cc = graph.connectedComponents().vertices
+
+        // Join the connected components with the usernames and id
+        val ccByUsername = users.join(cc).map {
+            case (id, (username, cc)) => (id, username, cc)
+        }
+        // Print the result
+        println(ccByUsername.collect().sortBy(_._3).mkString("\n"))
+
+        println("\nTotal groups: " + ccByUsername.map{ case (id, username, cc) => cc }.distinct().count() + "\n")
+
     }
 
 
@@ -142,13 +184,15 @@ object GraphxTesting{
      * Compute the strongly connected component (SCC) of each vertex and return a graph with the
      * vertex value containing the lowest vertex id in the SCC containing that vertex.
      *
+     * Display edges's membership and total groups
+     *
      * @param Graph[String,String] $graph - Graph element
      * @param Int $iteration - Number of iteration
      * @return Unit
      */
-    def ssc(graph:Graph[String,String], iteration:Int): Unit ={
+    def scc(graph:Graph[String,String], iteration:Int): Unit ={
 
-        println("\nCall StronglyConnectedComponents : iteration : " + iteration)
+        println(color("\nCall StronglyConnectedComponents : iteration : " + iteration , RED))
         val sccGraph = graph.stronglyConnectedComponents(5)
 
         val connectedGraph = sccGraph.vertices.map {
@@ -171,7 +215,7 @@ object GraphxTesting{
      * @return String - if success : username | failure : "user not found"
      */
     def findUserNameWithID (graph:Graph[String,String], userID:Int) : String = {
-        println("\nCall : findUserNameWithID")
+        println(color("\nCall : findUserNameWithID", RED))
 
         graph.vertices.filter{ case (id, name) => id == userID }.collect.foreach {
             (e: (org.apache.spark.graphx.VertexId, String)) => return e._2
@@ -186,7 +230,7 @@ object GraphxTesting{
      * @return String - if success : id found | failure : "0"
      */
     def findUserIDWithName(graph:Graph[String,String], userName:String) : String = {
-        println("\nCall : findUserIDWithName")
+        println(color("\nCall : findUserIDWithName", RED))
 
         graph.vertices.filter( _._2 == "Michael" ).collect.foreach {
             (e: (org.apache.spark.graphx.VertexId, String)) => return e._1.toString
@@ -201,7 +245,7 @@ object GraphxTesting{
      */
     def displayAllCommunications(graph:Graph[String,String]): Unit ={
 
-        println("\nCall : displayAllCommunications")
+        println(color("\nCall : displayAllCommunications", RED))
         println("Users communications: ")
 
         val facts: RDD[String] = graph.triplets.map(triplet =>  triplet.srcAttr + " communicate with " +
@@ -231,7 +275,7 @@ object GraphxTesting{
      *         String - default user
      */
     def initGraph(sc:SparkContext): (RDD[(VertexId, (String))], RDD[Edge[String]], String) ={
-        println("Call : initGraph")
+        println(color("\nCall : initGraph", RED))
 
         // Create an RDD for the vertices
         val users: RDD[(VertexId, (String))] =
@@ -294,4 +338,5 @@ object GraphxTesting{
 
         (users, relationships, defaultUser)
     }
+
 }
