@@ -10,14 +10,16 @@ import org.apache.spark.graphx._
 import org.apache.spark.rdd.RDD
 
 // Useful links
-// https://github.com/datastax/spark-cassandra-connector/blob/master/doc/0_quick_start.md
-// http://planetcassandra.org/getting-started-with-apache-spark-and-cassandra/
-// https://bcomposes.wordpress.com/2013/02/09/using-twitter4j-with-scala-to-access-streaming-tweets/
-// https://github.com/datastax/spark-cassandra-connector/blob/master/doc/5_saving.md
+// http://ampcamp.berkeley.edu/big-data-mini-course/graph-analytics-with-graphx.html
+// https://spark.apache.org/docs/latest/graphx-programming-guide.html
 
 object GraphxTesting{
 
     def main(args: Array[String]) {
+
+        println("\n\n***************************************************")
+        println("************       GraphxTesting      *************")
+        println("***************************************************\n")
 
         // Display only warning and infos messages
         Logger.getLogger("org").setLevel(Level.ERROR)
@@ -31,8 +33,9 @@ object GraphxTesting{
         val sparkConf = new SparkConf(true)
             .setMaster("local[4]")
             .setAppName("GraphxTesting")
-            .set("spark.cassandra.connection.host", "127.0.0.1") // Link to Cassandra
+            //.set("spark.cassandra.connection.host", "127.0.0.1") // Link to Cassandra
 
+        // Init SparkContext
         val sc = new SparkContext(sparkConf)
 
         // Create Vertices and Edges
@@ -64,7 +67,7 @@ object GraphxTesting{
             case (id, (name)) => User(name, 0, 0)
         }
 
-        initialUserGraph.edges.collect.foreach(println(_))
+        //initialUserGraph.edges.collect.foreach(println(_))
 
 
         // Fill in the degree informations (out and in degrees)
@@ -79,9 +82,6 @@ object GraphxTesting{
         userGraph.vertices.foreach {
             case (id, u) => println(s"User $id is called ${u.name} and received ${u.inDeg} tweets and send ${u.outDeg}.")
         }
-
-        println(graph.numEdges)
-
 
         // Call StronglyConnectedComponents
         time { ssc(graph, 5) }
@@ -106,7 +106,15 @@ object GraphxTesting{
          * @see [[org.apache.spark.graphx.lib.ConnectedComponents$#run]]
          */
 
+        // Find the connected components
+        val cc = graph.connectedComponents().vertices
+        // Join the connected components with the usernames
 
+        val ccByUsername = users.join(cc).map {
+            case (id, (username, cc)) => (username, cc)
+        }
+        // Print the result
+        println(ccByUsername.collect().mkString("\n"))
 
         /**
          * TriangleCount
@@ -129,22 +137,31 @@ object GraphxTesting{
 
 
     /**
-     * StronglyConnectedComponents
+     * @constructor StronglyConnectedComponents
      *
      * Compute the strongly connected component (SCC) of each vertex and return a graph with the
      * vertex value containing the lowest vertex id in the SCC containing that vertex.
+     *
+     * @param Graph[String,String] $graph - Graph element
+     * @param Int $iteration - Number of iteration
+     * @return Unit
      */
     def ssc(graph:Graph[String,String], iteration:Int): Unit ={
 
         println("\nCall StronglyConnectedComponents : iteration : " + iteration)
         val sccGraph = graph.stronglyConnectedComponents(5)
-        //users.join(sccGraph.vertices).foreach(println)
 
-        //val nameOf = relationships.collect.foreach (println)
+        val connectedGraph = sccGraph.vertices.map {
+            case (member, leaderGroup) => s"$member is in the group of $leaderGroup's edge"
+        }
 
-        sccGraph.vertices.map {
-            case (member, leader) => s"$member is in the group of $leader's edge"
-        }.collect.foreach(println)
+        val totalGroups = sccGraph.vertices.map {
+            case (member, leaderGroup) => leaderGroup
+        }
+
+        connectedGraph.collect.foreach(println)
+
+        println("\nTotal groups: " + totalGroups.distinct().count() + "\n")
     }
 
     /**
@@ -193,6 +210,11 @@ object GraphxTesting{
         facts.collect.foreach(println(_))
     }
 
+    /**
+     * @constructor timer for profiling block
+     * @param R $block - Block executed
+     * @return Unit
+     */
     def time[R](block: => R): R = {
         val t0 = System.nanoTime()
         val result = block    // call-by-name
@@ -209,11 +231,12 @@ object GraphxTesting{
      *         String - default user
      */
     def initGraph(sc:SparkContext): (RDD[(VertexId, (String))], RDD[Edge[String]], String) ={
-        println("Call : initGraph\n")
+        println("Call : initGraph")
 
         // Create an RDD for the vertices
         val users: RDD[(VertexId, (String))] =
-            sc.parallelize(Array((1L, "Michael"),
+            sc.parallelize(Array(
+                (1L, "Michael"),
                 (2L, "David"),
                 (3L, "Sarah"),
                 (4L, "Jean"),
@@ -222,12 +245,15 @@ object GraphxTesting{
                 (7L, "Harold"),
                 (8L, "Pierre"),
                 (9L, "Christophe"),
-                (10L, "Zoe")
+                (10L, "Zoe"),
+                (11L, "Fabien"),
+                (12L, "Nicolas")
             ))
 
         // Create an RDD for edges
         val relationships: RDD[Edge[String]] =
-            sc.parallelize(Array(Edge(1L, 2L, "1"),
+            sc.parallelize(Array(
+                Edge(1L, 2L, "1"),
                 Edge(1L, 7L, "2"),
                 Edge(1L, 6L, "3"),
                 Edge(6L, 1L, "4"),
@@ -258,7 +284,9 @@ object GraphxTesting{
                 Edge(6L, 1L, "29"),
                 Edge(6L, 1L, "30"),
                 Edge(1L, 7L, "31"),
-                Edge(1L, 7L, "32")
+                Edge(1L, 7L, "32"),
+                Edge(11L,12L,"33"),
+                Edge(12L,11L,"34")
             ))
 
         // Define a default user in case there are relationship with missing user
