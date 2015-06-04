@@ -1,3 +1,6 @@
+
+import cassandraUtils.CassandraUtils
+
 import org.apache.spark.SparkContext
 import org.apache.spark.SparkContext._
 import org.apache.spark.SparkConf
@@ -26,7 +29,7 @@ object GraphxTesting{
         println("************       GraphxTesting      *************")
         println("***************************************************\n")
 
-
+        val cu = new CassandraUtils
 
         // Display only warning and infos messages
         Logger.getLogger("org").setLevel(Level.ERROR)
@@ -40,7 +43,7 @@ object GraphxTesting{
         val sparkConf = new SparkConf(true)
             .setMaster("local[4]")
             .setAppName("GraphxTesting")
-            //.set("spark.cassandra.connection.host", "127.0.0.1") // Link to Cassandra
+            .set("spark.cassandra.connection.host", "127.0.0.1") // Link to Cassandra
 
         // Init SparkContext
         val sc = new SparkContext(sparkConf)
@@ -96,8 +99,18 @@ object GraphxTesting{
         // Call StronglyConnectedComponents
         time { scc(graph, 1) }
 
+        // get tweet content with tweet ID
+        time { cu getTweetContentFromID(sc,"606461329357045760") }
+        // this one does not exist
+        time { cu getTweetContentFromID(sc,"604230254979346433") }
+
+        // Get tweets from user
+        time { cu getTweetsIDFromUser(sc,"209144549") }
+
+
+
         // Get PageRank
-        time { getPageRank(graph, users) }
+        //time { getPageRank(graph, users) }
 
 
         //println(sccGraph)
@@ -106,8 +119,6 @@ object GraphxTesting{
 
         sccGraph.vertices.collect.foreach(println(_))
         sccGraph.vertices.count*/
-
-
 
 
         /**

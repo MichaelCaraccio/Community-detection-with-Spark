@@ -12,4 +12,4 @@ libraryDependencies ++= Seq(
 
 //libraryDependencies += "org.apache.spark" %% "spark-graphx" % "1.2.0"
 
-//libraryDependencies += "com.datastax.spark" %% "spark-cassandra-connector" % "1.2.1"
+libraryDependencies += "com.datastax.spark" %% "spark-cassandra-connector" % "1.2.1"
