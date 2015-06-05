@@ -107,6 +107,7 @@ object GraphxTesting{
         // Get tweets from user
         time { cu getTweetsIDFromUser(sc,"209144549") }
 
+        time { cu getTweetsContentFromGraph(graph,"209144549") }
 
 
         // Get PageRank
@@ -291,57 +292,57 @@ object GraphxTesting{
         // Create an RDD for the vertices
         val users: RDD[(VertexId, (String))] =
             sc.parallelize(Array(
-                (1L, "Michael"),
-                (2L, "David"),
-                (3L, "Sarah"),
-                (4L, "Jean"),
-                (5L, "Raphael"),
-                (6L, "Lucie"),
-                (7L, "Harold"),
-                (8L, "Pierre"),
-                (9L, "Christophe"),
-                (10L, "Zoe"),
-                (11L, "Fabien"),
-                (12L, "Nicolas")
+                (2732329846L, "Michael"),
+                (132988448L, "David"),
+                (473822999L, "Sarah"),
+                (2932436311L, "Jean"),
+                (2249679902L, "Raphael"),
+                (601389784L, "Lucie"),
+                (2941487254L, "Harold"),
+                (1192483885L, "Pierre"),
+                (465776805L, "Christophe"),
+                (838147628L, "Zoe"),
+                (2564641105L, "Fabien"),
+                (1518391292L, "Nicolas")
             ))
 
         // Create an RDD for edges
         val relationships: RDD[Edge[String]] =
             sc.parallelize(Array(
-                Edge(1L, 2L, "1"),
-                Edge(1L, 7L, "2"),
-                Edge(1L, 6L, "3"),
-                Edge(6L, 1L, "4"),
-                Edge(7L, 8L, "5"),
-                Edge(7L, 2L, "6"),
-                Edge(2L, 10L, "7"),
-                Edge(10L, 2L, "8"),
-                Edge(10L, 3L, "9"),
-                Edge(9L, 7L, "10"),
-                Edge(9L, 6L, "11"),
-                Edge(9L, 5L, "12"),
-                Edge(5L, 9L, "13"),
-                Edge(4L, 9L, "14"),
-                Edge(8L, 7L, "15"),
-                Edge(9L, 7L, "16"),
-                Edge(6L, 1L, "17"),
-                Edge(4L, 9L, "18"),
-                Edge(7L, 9L, "19"),
-                Edge(7L, 8L, "20"),
-                Edge(7L, 8L, "21"),
-                Edge(8L, 7L, "22"),
-                Edge(8L, 7L, "23"),
-                Edge(1L, 2L, "24"),
-                Edge(7L, 2L, "25"),
-                Edge(2L, 7L, "26"),
-                Edge(2L, 7L, "27"),
-                Edge(2L, 7L, "28"),
-                Edge(6L, 1L, "29"),
-                Edge(6L, 1L, "30"),
-                Edge(1L, 7L, "31"),
-                Edge(1L, 7L, "32"),
-                Edge(11L,12L,"33"),
-                Edge(12L,11L,"34")
+                Edge(2732329846L, 132988448L, "1"),
+                Edge(2732329846L, 2941487254L, "2"),
+                Edge(2732329846L, 601389784L, "3"),
+                Edge(601389784L, 2732329846L, "4"),
+                Edge(2941487254L, 1192483885L, "5"),
+                Edge(2941487254L, 132988448L, "6"),
+                Edge(132988448L, 838147628L, "7"),
+                Edge(838147628L, 132988448L, "8"),
+                Edge(838147628L, 473822999L, "9"),
+                Edge(465776805L, 2941487254L, "10"),
+                Edge(465776805L, 601389784L, "11"),
+                Edge(465776805L, 2249679902L, "12"),
+                Edge(2249679902L, 465776805L, "13"),
+                Edge(2932436311L, 465776805L, "14"),
+                Edge(1192483885L, 2941487254L, "15"),
+                Edge(465776805L, 2941487254L, "16"),
+                Edge(601389784L, 2732329846L, "17"),
+                Edge(2932436311L, 465776805L, "18"),
+                Edge(2941487254L, 465776805L, "19"),
+                Edge(2941487254L, 1192483885L, "20"),
+                Edge(2941487254L, 1192483885L, "21"),
+                Edge(1192483885L, 2941487254L, "22"),
+                Edge(1192483885L, 2941487254L, "23"),
+                Edge(2732329846L, 132988448L, "24"),
+                Edge(2941487254L, 132988448L, "25"),
+                Edge(132988448L, 2941487254L, "26"),
+                Edge(132988448L, 2941487254L, "27"),
+                Edge(132988448L, 2941487254L, "28"),
+                Edge(601389784L, 2732329846L, "29"),
+                Edge(601389784L, 2732329846L, "30"),
+                Edge(2732329846L, 2941487254L, "31"),
+                Edge(2732329846L, 2941487254L, "32"),
+                Edge(2564641105L,1518391292L,"33"),
+                Edge(1518391292L,2564641105L,"34")
             ))
 
         // Define a default user in case there are relationship with missing user
