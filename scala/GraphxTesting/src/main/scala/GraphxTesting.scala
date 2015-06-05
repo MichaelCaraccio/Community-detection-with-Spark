@@ -1,5 +1,6 @@
-
 import cassandraUtils.CassandraUtils
+
+import scala.collection.mutable.ArrayBuffer
 
 import org.apache.spark.SparkContext
 import org.apache.spark.SparkContext._
@@ -9,6 +10,9 @@ import org.apache.log4j.Logger
 import org.apache.log4j.Level
 
 import org.apache.spark.graphx._
+import org.apache.spark.graphx.lib._
+import org.apache.spark.graphx.PartitionStrategy._
+
 // To make some of the examples work we will also need RDD
 import org.apache.spark.rdd.RDD
 
@@ -41,7 +45,7 @@ object GraphxTesting{
 
         // Spark configuration
         val sparkConf = new SparkConf(true)
-            .setMaster("local[4]")
+            .setMaster("local[2]")
             .setAppName("GraphxTesting")
             .set("spark.cassandra.connection.host", "127.0.0.1") // Link to Cassandra
 
@@ -52,7 +56,8 @@ object GraphxTesting{
         val(users, relationships, defaultUser) = initGraph(sc)
 
         // Build the initial Graph
-        val graph = Graph(users, relationships, defaultUser)
+        val graph = Graph(users, relationships, defaultUser).cache()
+
 
         // See who communicates with who
         displayAllCommunications(graph)
@@ -99,6 +104,12 @@ object GraphxTesting{
         // Call StronglyConnectedComponents
         time { scc(graph, 1) }
 
+        // Get PageRank
+        //time { getPageRank(graph, users) }
+
+        // Get triangle Count
+        getTriangleCount(sc, graph, users)
+
         // get tweet content with tweet ID
         time { cu getTweetContentFromID(sc,"606461329357045760") }
         // this one does not exist
@@ -107,11 +118,11 @@ object GraphxTesting{
         // Get tweets from user
         time { cu getTweetsIDFromUser(sc,"209144549") }
 
+        // Get every tweets from the graph
         time { cu getTweetsContentFromEdge(sc, graph.edges) }
 
 
-        // Get PageRank
-        //time { getPageRank(graph, users) }
+
 
 
         //println(sccGraph)
@@ -122,17 +133,62 @@ object GraphxTesting{
         sccGraph.vertices.count*/
 
 
-        /**
-         * TriangleCount
-         *
-         * Compute the number of triangles passing through each vertex.
-         *
-         * @see [[org.apache.spark.graphx.lib.TriangleCount$#run]]
-         */
+
 
 
     }
 
+
+    /**
+     * getTriangleCount
+     *
+     * Compute the number of triangles passing through each vertex.
+     *
+     * @see [[org.apache.spark.graphx.lib.TriangleCount$#run]]
+     */
+    def getTriangleCount(sc:SparkContext, graph:Graph[String,String], users:RDD[(VertexId, (String))]): Unit ={
+
+        println(color("\nCall getTriangleCount" , RED))
+
+        val edges = graph.edges.map { e =>
+            if (e.srcId < e.dstId) {
+                Edge(e.srcId, e.dstId, e.attr)
+            }
+            else {
+                Edge(e.dstId, e.srcId, e.attr)
+            }
+        }
+        println("----edges----")
+        edges.foreach(println(_))
+
+
+
+
+        val newGraph = Graph(users, edges, "").cache()
+
+        // val edgeRDD: RDD[Edge[(String)]] = sc.parallelize(edgeArray)
+        // Find the triangle count for each vertex
+        val triCounts = newGraph.partitionBy(PartitionStrategy.RandomVertexCut).cache().triangleCount().vertices
+
+        println("----triCounts----")
+        triCounts.collect.foreach(println)
+
+
+        val triCountByUsername = users.join(triCounts).map {
+            case (id, (username, rank)) => (id, username, rank)
+        }
+        println("----2----")
+        users.foreach(println)
+
+
+        println("----3----")
+        triCountByUsername.foreach(println)
+
+        //println("\nTotal: " + triCountByUsername.map{ case (id, username, rank) => rank }.distinct().count() + "\n")
+
+        // Print the result
+        //println(triCountByUsername.collect())
+    }
 
     /**
      * @constructor getPageRank
@@ -148,7 +204,7 @@ object GraphxTesting{
      */
     def getPageRank(graph:Graph[String,String], users:RDD[(VertexId, (String))]): Unit ={
 
-        println(color("\nCall PageRank" , RED))
+        println(color("\nCall getPageRank" , RED))
 
         val ranks = graph.pageRank(0.00001).vertices
 
@@ -350,5 +406,4 @@ object GraphxTesting{
 
         (users, relationships, defaultUser)
     }
-
 }
