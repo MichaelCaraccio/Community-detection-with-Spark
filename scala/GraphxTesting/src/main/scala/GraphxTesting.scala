@@ -108,7 +108,7 @@ object GraphxTesting{
         //time { getPageRank(graph, users) }
 
         // Get triangle Count
-        getTriangleCount(sc, graph, users)
+        time { getTriangleCount(graph, users) }
 
         // get tweet content with tweet ID
         time { cu getTweetContentFromID(sc,"606461329357045760") }
@@ -131,11 +131,6 @@ object GraphxTesting{
 
         sccGraph.vertices.collect.foreach(println(_))
         sccGraph.vertices.count*/
-
-
-
-
-
     }
 
 
@@ -144,12 +139,17 @@ object GraphxTesting{
      *
      * Compute the number of triangles passing through each vertex.
      *
+     * @param Graph[String,String] $graph - Graph element
+     * @param RDD[(VertexId, (String))] $users - Vertices
+     * @return Unit
+     *
      * @see [[org.apache.spark.graphx.lib.TriangleCount$#run]]
      */
-    def getTriangleCount(sc:SparkContext, graph:Graph[String,String], users:RDD[(VertexId, (String))]): Unit ={
+    def getTriangleCount(graph:Graph[String,String], users:RDD[(VertexId, (String))]): Unit ={
 
         println(color("\nCall getTriangleCount" , RED))
 
+        // Sort edges ID srcID < dstID
         val edges = graph.edges.map { e =>
             if (e.srcId < e.dstId) {
                 Edge(e.srcId, e.dstId, e.attr)
@@ -158,36 +158,22 @@ object GraphxTesting{
                 Edge(e.dstId, e.srcId, e.attr)
             }
         }
-        println("----edges----")
-        edges.foreach(println(_))
 
-
-
-
+        // Temporary graph
         val newGraph = Graph(users, edges, "").cache()
 
-        // val edgeRDD: RDD[Edge[(String)]] = sc.parallelize(edgeArray)
         // Find the triangle count for each vertex
+        // TriangleCount requires the graph to be partitioned
         val triCounts = newGraph.partitionBy(PartitionStrategy.RandomVertexCut).cache().triangleCount().vertices
-
-        println("----triCounts----")
-        triCounts.collect.foreach(println)
-
 
         val triCountByUsername = users.join(triCounts).map {
             case (id, (username, rank)) => (id, username, rank)
         }
-        println("----2----")
-        users.foreach(println)
 
-
-        println("----3----")
+        println("Display triangle's sum for each user")
         triCountByUsername.foreach(println)
 
-        //println("\nTotal: " + triCountByUsername.map{ case (id, username, rank) => rank }.distinct().count() + "\n")
-
-        // Print the result
-        //println(triCountByUsername.collect())
+        println("\nTotal: " + triCountByUsername.map{ case (id, username, rank) => rank }.distinct().count() + "\n")
     }
 
     /**
@@ -242,7 +228,6 @@ object GraphxTesting{
         println(ccByUsername.collect().sortBy(_._3).mkString("\n"))
 
         println("\nTotal groups: " + ccByUsername.map{ case (id, username, cc) => cc }.distinct().count() + "\n")
-
     }
 
 

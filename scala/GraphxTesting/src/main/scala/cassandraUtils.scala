@@ -36,7 +36,7 @@ class CassandraUtils {
 
         val query = sc.cassandraTable("twitter", "tweet_filtered").select("tweet_text").where("tweet_id = ?", id)
 
-        if(query.count != 0) {
+        if(query.collect().length != 0) {
             query.foreach(e => println(e.getString("tweet_text")))
         }
         else
@@ -55,11 +55,11 @@ class CassandraUtils {
     def getTweetsIDFromUser(sc:SparkContext, id:String): Unit = {
 
         println(color("\nCall getTweetsIDFromUser" , RED))
+        println("Tweets found:")
 
         val query = sc.cassandraTable("twitter", "users_communicate").select("tweet_id").where("user_send_id = ?", id)
 
-        if(query.count != 0)
-        {
+        if(query.collect().length != 0) {
             query.foreach(e => println(e.getString("tweet_id")))
         }
         else
@@ -85,13 +85,13 @@ class CassandraUtils {
         })
 
         // Result will be stored in an array
-        val result = ArrayBuffer[String]()
+        var result = ArrayBuffer[String]()
 
         // Queries
         for (tweet <- tweetsID.toArray) {
             val query = sc.cassandraTable("twitter", "tweet_filtered").select("tweet_text").where("tweet_id = ?", tweet)
 
-            if(query.count != 0) {
+            if(query.collect().length != 0) {
                 result += query.first.getString("tweet_text")
             }
         }
