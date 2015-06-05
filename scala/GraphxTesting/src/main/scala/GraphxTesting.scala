@@ -107,7 +107,7 @@ object GraphxTesting{
         // Get tweets from user
         time { cu getTweetsIDFromUser(sc,"209144549") }
 
-        time { cu getTweetsContentFromGraph(graph,"209144549") }
+        time { cu getTweetsContentFromEdge(sc, graph.edges) }
 
 
         // Get PageRank
