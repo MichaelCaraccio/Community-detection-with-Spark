@@ -1,4 +1,6 @@
-import cassandraUtils.CassandraUtils
+import CassandraUtils.CassandraUtils
+import MllibUtils.MllibUtils
+import KCoreDecomposition.KCoreDecomposition
 
 import scala.collection.mutable.ArrayBuffer
 
@@ -29,11 +31,13 @@ object GraphxTesting{
 
     def main(args: Array[String]) {
 
-        println("\n\n***************************************************")
-        println("************       GraphxTesting      *************")
-        println("***************************************************\n")
+        println("\n\n**************************************************************")
+        println("******************       GraphxTesting      ******************")
+        println("**************************************************************\n")
 
         val cu = new CassandraUtils
+        val mu = new MllibUtils
+        val kd = new KCoreDecomposition
 
         // Display only warning and infos messages
         Logger.getLogger("org").setLevel(Level.ERROR)
@@ -58,45 +62,39 @@ object GraphxTesting{
         // Build the initial Graph
         val graph = Graph(users, relationships, defaultUser).cache()
 
+        println("\n--------------------------------------------------------------")
+        println("Operations on tweets")
+        println("--------------------------------------------------------------\n")
 
         // See who communicates with who
-        displayAllCommunications(graph)
+        time { displayAllCommunications(graph) }
 
         // Let's find user id
-        val id = findUserIDWithName(graph, "Michael")
-        println("ID for user Michael : " + id.toString)
+        val id = time { findUserIDByName(graph, "Michael") }
+        println("ID for user Michael is : " + id.toString)
 
         // Find username with user ID
-        val name = findUserNameWithID(graph, 1)
-        println("Name for id 1: " + name.toString)
+        val name = time { findUserNameByID(graph, 1) }
+        println("Name for id 1 is : " + name.toString)
 
+        // get tweet content with tweet ID
+        var resultGetTweetContentFromID =  time { cu getTweetContentFromID(sc,"606461329357045760") }
+        println(resultGetTweetContentFromID)
 
-        // Create User class
-        case class User(name: String, // Username
-                        inDeg: Int,   // Received tweets
-                        outDeg: Int)  // Sent tweets
+        // this one does not exist
+        resultGetTweetContentFromID =  time { cu getTweetContentFromID(sc,"604230254979346433") }
+        println(resultGetTweetContentFromID)
 
-        // Create user Graph
-        // def mapVertices[VD2](map: (VertexID, VD) => VD2): Graph[VD2, ED]
-        val initialUserGraph: Graph[User, String] = graph.mapVertices {
-            case (id, (name)) => User(name, 0, 0)
-        }
+        // Get tweets from user
+        val resultGetTweetsIDFromUser = time { cu getTweetsIDFromUser(sc,"209144549") }
+        resultGetTweetsIDFromUser.foreach(println(_))
 
-        //initialUserGraph.edges.collect.foreach(println(_))
+        // Count in and out degrees
+        time { inAndOutDegrees(graph) }
 
-
-        // Fill in the degree informations (out and in degrees)
-        val userGraph = initialUserGraph.outerJoinVertices(initialUserGraph.inDegrees) {
-            case (id, u, inDegOpt) => User(u.name, inDegOpt.getOrElse(0), u.outDeg)
-        }.outerJoinVertices(initialUserGraph.outDegrees) {
-            case (id, u, outDegOpt) => User(u.name, u.inDeg, outDegOpt.getOrElse(0))
-        }
-
-        // Display the userGraph    
-        println(color("\nUsers out and in degrees: ", RED))
-        userGraph.vertices.foreach {
-            case (id, u) => println(s"User $id is called ${u.name} and received ${u.inDeg} tweets and send ${u.outDeg}.")
-        }
+        println("\n--------------------------------------------------------------")
+        println("Community detection")
+        println("--------------------------------------------------------------\n")
 
         // Call ConnectedComponents
         time { cc(graph, users) }
@@ -104,25 +102,30 @@ object GraphxTesting{
         // Call StronglyConnectedComponents
         time { scc(graph, 1) }
 
-        // Get PageRank
-        //time { getPageRank(graph, users) }
-
         // Get triangle Count
         time { getTriangleCount(graph, users) }
 
-        // get tweet content with tweet ID
-        time { cu getTweetContentFromID(sc,"606461329357045760") }
-        // this one does not exist
-        time { cu getTweetContentFromID(sc,"604230254979346433") }
+        // Get PageRank
+        time { getPageRank(graph, users) }
 
-        // Get tweets from user
-        time { cu getTweetsIDFromUser(sc,"209144549") }
+        // K-Core decomposition
+        time { kd run(graph, users, 4, 2) }
 
-        // Get every tweets from the graph
-        time { cu getTweetsContentFromEdge(sc, graph.edges) }
+        println("\n--------------------------------------------------------------")
+        println("Mllib")
+        println("--------------------------------------------------------------\n")
 
+        // LDA
+        // 1. Get every tweets from the graph and store it in corpus
+        // 2. Call LDA method
+        val corpus = time { cu getTweetsContentFromEdge(sc, graph.edges) }
+        corpus.foreach(println(_))
 
-
+        val numTopics = 10
+        val numIterations = 10
+        val numWordsByTopics = 10
+        val numStopwords  = 20
+        time { mu getLDA(sc, corpus, numTopics, numIterations, numWordsByTopics, numStopwords) }
 
 
         //println(sccGraph)
@@ -203,6 +206,43 @@ object GraphxTesting{
     }
 
     /**
+     * @constructor inAndOutDegrees
+     *
+     * @param Graph[String,String] $graph - Graph element
+     * @return Unit
+     *
+     */
+    def inAndOutDegrees(graph:Graph[String,String]): Unit ={
+
+        println(color("\nCall inAndOutDegrees", RED))
+
+        // Create User class
+        case class User(name: String, // Username
+                        inDeg: Int,   // Received tweets
+                        outDeg: Int)  // Sent tweets
+
+        // Create user Graph
+        // def mapVertices[VD2](map: (VertexID, VD) => VD2): Graph[VD2, ED]
+        val initialUserGraph: Graph[User, String] = graph.mapVertices {
+            case (id, (name)) => User(name, 0, 0)
+        }
+
+        //initialUserGraph.edges.collect.foreach(println(_))
+
+
+        // Fill in the degree informations (out and in degrees)
+        val userGraph = initialUserGraph.outerJoinVertices(initialUserGraph.inDegrees) {
+            case (id, u, inDegOpt) => User(u.name, inDegOpt.getOrElse(0), u.outDeg)
+        }.outerJoinVertices(initialUserGraph.outDegrees) {
+            case (id, u, outDegOpt) => User(u.name, u.inDeg, outDegOpt.getOrElse(0))
+        }
+
+        // Display the userGraph
+        userGraph.vertices.foreach {
+            case (id, u) => println(s"User $id is called ${u.name} and received ${u.inDeg} tweets and send ${u.outDeg}.")
+        }
+    }
+    /**
      * @constructor ConnectedComponents
      *
      * Compute the connected component membership of each vertex and return a graph with the vertex
@@ -262,12 +302,15 @@ object GraphxTesting{
     }
 
     /**
-     * @constructor find user ID with username
+     * @constructor findUserByID
+     *
+     * find user ID with username
+     *
      * @param Graph[String,String] $graph - Graph element
      * @param Int $userID - User id
      * @return String - if success : username | failure : "user not found"
      */
-    def findUserNameWithID (graph:Graph[String,String], userID:Int) : String = {
+    def findUserNameByID (graph:Graph[String,String], userID:Int) : String = {
         println(color("\nCall : findUserNameWithID", RED))
 
         graph.vertices.filter{ case (id, name) => id == userID }.collect.foreach {
@@ -277,12 +320,15 @@ object GraphxTesting{
     }
 
     /**
-     * @constructor find username with id
+     * @constructor findUserIDByName
+     *
+     * find username with id
+     *
      * @param Graph[String,String] $graph - Graph element
      * @param String $userName - Username
      * @return String - if success : id found | failure : "0"
      */
-    def findUserIDWithName(graph:Graph[String,String], userName:String) : String = {
+    def findUserIDByName(graph:Graph[String,String], userName:String) : String = {
         println(color("\nCall : findUserIDWithName", RED))
 
         graph.vertices.filter( _._2 == "Michael" ).collect.foreach {
@@ -292,7 +338,10 @@ object GraphxTesting{
     }
 
     /**
-     * @constructor display all communications between users
+     * @constructor displayAllCommunications
+     *
+     * display all communications between users
+     *
      * @param Graph[String,String] $graph - Graph element
      * @return Unit
      */
@@ -308,7 +357,10 @@ object GraphxTesting{
     }
 
     /**
-     * @constructor timer for profiling block
+     * @constructor time
+     *
+     * timer for profiling block
+     *
      * @param R $block - Block executed
      * @return Unit
      */
@@ -321,7 +373,10 @@ object GraphxTesting{
     }
 
     /**
-     * @constructor init data - construct graph and populate it
+     * @constructor initGraph
+     *
+     * init data - construct graph and populate it
+     *
      * @param SparkContext $sc - Sparkcontext
      * @return RDD[(VertexId, (String))] - users (Vertices)
      *         RDD[Edge[String]] - relationship (Edges)

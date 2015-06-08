@@ -1,4 +1,4 @@
-package cassandraUtils
+package CassandraUtils
 
 import scala.collection.mutable.ArrayBuffer
 
@@ -30,17 +30,19 @@ class CassandraUtils {
      * @param String $id - tweet id
      * @return Unit
      */
-    def getTweetContentFromID(sc:SparkContext, id:String): Unit = {
+    def getTweetContentFromID(sc:SparkContext, id:String): String = {
 
         println(color("\nCall getTweetContentFromID" , RED))
 
         val query = sc.cassandraTable("twitter", "tweet_filtered").select("tweet_text").where("tweet_id = ?", id)
 
         if(query.collect().length != 0) {
-            query.foreach(e => println(e.getString("tweet_text")))
+            query.first.getString("tweet_text")
         }
         else
-            println("Tweet not found")
+            "Tweet not found"
+
+
     }
 
     /**
@@ -52,18 +54,25 @@ class CassandraUtils {
      * @param String $id - user (sender) id
      * @return Unit
      */
-    def getTweetsIDFromUser(sc:SparkContext, id:String): Unit = {
+    def getTweetsIDFromUser(sc:SparkContext, id:String): ArrayBuffer[String] = {
 
         println(color("\nCall getTweetsIDFromUser" , RED))
         println("Tweets found:")
 
         val query = sc.cassandraTable("twitter", "users_communicate").select("tweet_id").where("user_send_id = ?", id)
 
+        // Result will be stored in an array
+        var result = ArrayBuffer[String]()
+
         if(query.collect().length != 0) {
-            query.foreach(e => println(e.getString("tweet_id")))
+            result += query.first.getString("tweet_id")
         }
-        else
-            println("This user does not communicate")
+
+        // Display result
+        result.foreach(println(_))
+
+        // Return
+        result
     }
 
     /**
@@ -75,7 +84,7 @@ class CassandraUtils {
      * @param RDD[Edge[String]] $edge - graph's edge
      * @return Unit
      */
-    def getTweetsContentFromEdge(sc:SparkContext, edge:RDD[Edge[String]]): Unit = {
+    def getTweetsContentFromEdge(sc:SparkContext, edge:RDD[Edge[String]]): RDD[String] = {
 
         println(color("\nCall getTweetsContentFromEdge" , RED))
 
@@ -96,6 +105,9 @@ class CassandraUtils {
             }
         }
 
-        result.foreach(println(_))
+        //result.foreach(println(_))
+
+        // return
+        sc.parallelize(result)
     }
 }

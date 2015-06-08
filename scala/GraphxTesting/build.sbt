@@ -14,5 +14,7 @@ libraryDependencies += "com.datastax.spark" %% "spark-cassandra-connector" % "1.
 // SPARK 1.3.0
 libraryDependencies ++= Seq(
   "org.apache.spark" %% "spark-core"              % "1.3.0" % "provided",
-  "org.apache.spark" %% "spark-graphx"            % "1.3.0" % "provided")
+  "org.apache.spark" %% "spark-graphx"            % "1.3.0" % "provided",
+  "org.apache.spark" %% "spark-mllib"             % "1.3.0" % "provided")
+
 libraryDependencies += "com.datastax.spark" %% "spark-cassandra-connector" % "1.3.0-M1"
