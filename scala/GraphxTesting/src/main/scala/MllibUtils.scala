@@ -88,7 +88,7 @@ class MllibUtils {
 
         println("Tweets: " + corpus.count)
         println("Words: " + termCounts.map{case (word, count) => count}.reduce(_ + _))
-        
+
         // Print topics, showing top-weighted 10 terms for each topic.
         val topicIndices = ldaModel.describeTopics(maxTermsPerTopic = numWordsByTopics)
         topicIndices.foreach { case (terms, termWeights) =>

@@ -18,6 +18,9 @@ import org.apache.spark.graphx.PartitionStrategy._
 // To make some of the examples work we will also need RDD
 import org.apache.spark.rdd.RDD
 
+import scala.reflect.ClassTag
+
+
 // Useful links
 // http://ampcamp.berkeley.edu/big-data-mini-course/graph-analytics-with-graphx.html
 // https://spark.apache.org/docs/latest/graphx-programming-guide.html
@@ -111,6 +114,12 @@ object GraphxTesting{
         // K-Core decomposition
         time { kd run(graph, users, 4, 2) }
 
+        // LabelPropagation
+        val graphLabelPropagation = time { LabelPropagation(graph, 4) }
+        graphLabelPropagation.vertices.collect.foreach(println(_))
+        graphLabelPropagation.edges.collect.foreach(println(_))
+
+
         println("\n--------------------------------------------------------------")
         println("Mllib")
         println("--------------------------------------------------------------\n")
@@ -136,6 +145,32 @@ object GraphxTesting{
         sccGraph.vertices.count*/
     }
 
+
+
+    def LabelPropagation[VD, ED: ClassTag](graph: Graph[VD, ED], maxSteps: Int): Graph[VertexId, ED] = {
+        println(color("\nCall LabelPropagation" , RED))
+
+        val lpaGraph = graph.mapVertices { case (vid, _) => vid }
+        def sendMessage(e: EdgeTriplet[VertexId, ED]): Iterator[(VertexId, Map[VertexId, VertexId])] = {
+            Iterator((e.srcId, Map(e.dstAttr -> 1L)), (e.dstId, Map(e.srcAttr -> 1L)))
+        }
+        def mergeMessage(count1: Map[VertexId, Long], count2: Map[VertexId, Long])
+        : Map[VertexId, Long] = {
+            (count1.keySet ++ count2.keySet).map { i =>
+                val count1Val = count1.getOrElse(i, 0L)
+                val count2Val = count2.getOrElse(i, 0L)
+                i -> (count1Val + count2Val)
+            }.toMap
+        }
+        def vertexProgram(vid: VertexId, attr: Long, message: Map[VertexId, Long]): VertexId = {
+            if (message.isEmpty) attr else message.maxBy(_._2)._1
+        }
+        val initialMessage = Map[VertexId, Long]()
+        Pregel(lpaGraph, initialMessage, maxIterations = maxSteps)(
+            vprog = vertexProgram,
+            sendMsg = sendMessage,
+            mergeMsg = mergeMessage)
+    }
 
     /**
      * getTriangleCount
