@@ -41,8 +41,6 @@ class CassandraUtils {
         }
         else
             "Tweet not found"
-
-
     }
 
     /**

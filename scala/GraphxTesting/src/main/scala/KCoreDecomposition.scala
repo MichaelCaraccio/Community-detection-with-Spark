@@ -34,12 +34,10 @@ class KCoreDecomposition extends Logging with Serializable {
 
     def color(str: String, col: String): String = "%s%s%s".format(col, str, ENDC)
 
-    def run[VD: ClassTag, ED: ClassTag](
-                                           graph: Graph[VD, ED],
-                                           users:RDD[(VertexId, (String))],
-                                           kmax: Int,
-                                           kmin: Int = 1)
-    : Graph[Int, ED] = {
+    def getKCoreGraph[VD: ClassTag, ED: ClassTag](graph: Graph[VD, ED],
+                                        users:RDD[(VertexId, (String))],
+                                        kmax: Int,
+                                        kmin: Int = 1): Graph[String,ED] = {
 
         // Graph[(Int, Boolean), ED] - boolean indicates whether it is active or not
         var g = graph.outerJoinVertices(graph.degrees)((vid, oldData, newData) => newData.getOrElse(0)).cache
@@ -48,31 +46,32 @@ class KCoreDecomposition extends Logging with Serializable {
 
         println(color("\nCall KCoreDecomposition" , RED))
 
-        logWarning(s"Numvertices: $numVertices")
-        logWarning(s"degree sample: ${degrees.take(10).mkString(", ")}")
-        logWarning("degree distribution: " + degrees.map{ case (vid,data) => (data, 1)}.reduceByKey((_+_)).collect().mkString(", "))
-        logWarning("degree distribution: " + degrees.map{ case (vid,data) => (data, 1)}.reduceByKey((_+_)).take(10).mkString(", "))
+        logWarning(s"Number of vertices: $numVertices")
+        logWarning(s"Degree sample: ${degrees.take(10).mkString(", ")}")
+        logWarning(s"Degree distribution: " + degrees.map{ case (vid,data) => (data, 1)}.reduceByKey((_+_)).collect().mkString(", "))
+        logWarning(s"Degree distribution: " + degrees.map{ case (vid,data) => (data, 1)}.reduceByKey((_+_)).take(10).mkString(", "))
 
-        var curK = kmin
-        while (curK <= kmax) {
-            g = computeCurrentKCore(g, curK).cache
-            val testK = curK
-            val vCount = g.vertices.filter{ case (vid, vd) => vd >= curK}.count()
-            val eCount = g.triplets.map{t => t.srcAttr >= testK && t.dstAttr >= testK }.count()
+        val curK = kmin
 
-            val v = g.vertices.filter{ case (vid, vd) => vd >= curK}
+        g = computeCurrentKCore(g, curK).cache
+        val testK = curK
+        val vCount = g.vertices.filter{ case (vid, vd) => vd >= curK}.count()
+        val eCount = g.triplets.map{t => t.srcAttr >= testK && t.dstAttr >= testK }.count()
 
-            val ranksByUsername = users.join(v).map {
-                case (id, (username, rank)) => (id, username, rank)
-            }
+        val v = g.vertices.filter{ case (vid, vd) => vd >= curK}
 
-            // Print the result descending
-            println(ranksByUsername.collect().sortBy(_._3).reverse.mkString("\n"))
+        logWarning(s"K=$curK, V=$vCount, E=$eCount")
 
-            logWarning(s"K=$curK, V=$vCount, E=$eCount")
-            curK += 1
+        // Create new RDD users
+        val newUser = users.join(v).map {
+            case (id, (username, rank)) => (id, username)
         }
-        g.mapVertices({ case (_, k) => k})
+
+        // Create a new graph
+        val gra = Graph(newUser, g.edges)
+
+        // Remove missing vertices as well as the edges to connected to them
+        return gra.subgraph(vpred = (id, username) => username != null)
     }
 
     def computeCurrentKCore[ED: ClassTag](graph: Graph[Int, ED], k: Int) = {

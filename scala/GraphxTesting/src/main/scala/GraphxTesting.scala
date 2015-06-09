@@ -65,6 +65,7 @@ object GraphxTesting{
         // Build the initial Graph
         val graph = Graph(users, relationships, defaultUser).cache()
 
+        /*
         println("\n--------------------------------------------------------------")
         println("Operations on tweets")
         println("--------------------------------------------------------------\n")
@@ -94,7 +95,8 @@ object GraphxTesting{
 
         // Count in and out degrees
         time { inAndOutDegrees(graph) }
-
+        */
+        /*
         println("\n--------------------------------------------------------------")
         println("Community detection")
         println("--------------------------------------------------------------\n")
@@ -115,12 +117,26 @@ object GraphxTesting{
         time { kd run(graph, users, 4, 2) }
 
         // LabelPropagation
-        val graphLabelPropagation = time { LabelPropagation(graph, 4) }
+        val graphLabelPropagation = time { LabelPropagation.run(graph, 4).cache() }
+
+        println("VERTICES")
         graphLabelPropagation.vertices.collect.foreach(println(_))
+
+        val labelVertices = graphLabelPropagation.vertices
+
+        val displayVertices = users.join(labelVertices).map {
+            case (id, (username, rank)) => (id, username, rank)
+        }
+        println("VERTICES NAMED")
+
+        // Print the result descending
+        println(displayVertices.collect().sortBy(_._3).reverse.mkString("\n"))
+        println("EDGES")
+
         graphLabelPropagation.edges.collect.foreach(println(_))
 
-
-        println("\n--------------------------------------------------------------")
+        */
+        /*println("\n--------------------------------------------------------------")
         println("Mllib")
         println("--------------------------------------------------------------\n")
 
@@ -135,6 +151,42 @@ object GraphxTesting{
         val numWordsByTopics = 10
         val numStopwords  = 20
         time { mu getLDA(sc, corpus, numTopics, numIterations, numWordsByTopics, numStopwords) }
+        */
+
+
+        println("\n--------------------------------------------------------------")
+        println("First Step - K-Core Decomposition algorithm")
+        println("--------------------------------------------------------------")
+
+        // K-Core decomposition
+        val graph_2 = time { kd getKCoreGraph(graph, users, 5, 5) }.cache()
+
+        graph_2.edges.collect.foreach(println(_))
+        graph_2.vertices.collect.foreach(println(_))
+
+        println("\n--------------------------------------------------------------")
+        println("Second Step - Connected Components algorithm")
+        println("--------------------------------------------------------------")
+
+        // Call ConnectedComponents
+        time { cc(graph_2, graph_2.vertices) }
+
+        println("\n--------------------------------------------------------------")
+        println("Third Step - Get Tweets from Edges")
+        println("--------------------------------------------------------------")
+
+        val corpus = time { cu getTweetsContentFromEdge(sc, graph_2.edges) }
+        corpus.foreach(println(_))
+
+        println("\n--------------------------------------------------------------")
+        println("Fourth Step - LDA Algorithm")
+        println("--------------------------------------------------------------")
+
+        val numTopics = 10
+        val numIterations = 10
+        val numWordsByTopics = 10
+        val numStopwords  = 20
+        time { mu getLDA(sc, corpus, numTopics, numIterations, numWordsByTopics, numStopwords) }
 
 
         //println(sccGraph)
@@ -143,33 +195,6 @@ object GraphxTesting{
 
         sccGraph.vertices.collect.foreach(println(_))
         sccGraph.vertices.count*/
-    }
-
-
-
-    def LabelPropagation[VD, ED: ClassTag](graph: Graph[VD, ED], maxSteps: Int): Graph[VertexId, ED] = {
-        println(color("\nCall LabelPropagation" , RED))
-
-        val lpaGraph = graph.mapVertices { case (vid, _) => vid }
-        def sendMessage(e: EdgeTriplet[VertexId, ED]): Iterator[(VertexId, Map[VertexId, VertexId])] = {
-            Iterator((e.srcId, Map(e.dstAttr -> 1L)), (e.dstId, Map(e.srcAttr -> 1L)))
-        }
-        def mergeMessage(count1: Map[VertexId, Long], count2: Map[VertexId, Long])
-        : Map[VertexId, Long] = {
-            (count1.keySet ++ count2.keySet).map { i =>
-                val count1Val = count1.getOrElse(i, 0L)
-                val count2Val = count2.getOrElse(i, 0L)
-                i -> (count1Val + count2Val)
-            }.toMap
-        }
-        def vertexProgram(vid: VertexId, attr: Long, message: Map[VertexId, Long]): VertexId = {
-            if (message.isEmpty) attr else message.maxBy(_._2)._1
-        }
-        val initialMessage = Map[VertexId, Long]()
-        Pregel(lpaGraph, initialMessage, maxIterations = maxSteps)(
-            vprog = vertexProgram,
-            sendMsg = sendMessage,
-            mergeMsg = mergeMessage)
     }
 
     /**

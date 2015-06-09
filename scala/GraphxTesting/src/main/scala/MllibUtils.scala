@@ -1,7 +1,9 @@
 package MllibUtils
 
 import scala.collection.mutable
-import org.apache.spark.mllib.clustering.LDA
+import org.apache.spark.mllib.clustering._
+import org.apache.spark.mllib.linalg.{Vector, DenseMatrix, Matrix, Vectors}
+
 import org.apache.spark.mllib.linalg.{Vector, Vectors}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.SparkContext
@@ -80,14 +82,22 @@ class MllibUtils {
                 (id, Vectors.sparse(vocab.size, counts.toSeq))
             }
 
-        // Set LDA parameters
-        val lda = new LDA().setK(numTopics).setMaxIterations(numIterations)
+        val topicSmoothing = 1.2
+        val termSmoothing = 1.2
 
-        val ldaModel = lda.run(documents)
+        // Set LDA parameters
+        val lda = new LDA().setK(numTopics)
+                           .setDocConcentration(topicSmoothing)
+                           .setTopicConcentration(termSmoothing)
+                           .setMaxIterations(numIterations)
+
+        val ldaModel: DistributedLDAModel = lda.run(documents).asInstanceOf[DistributedLDAModel]
+
         val avgLogLikelihood = ldaModel.logLikelihood / documents.count()
 
-        println("Tweets: " + corpus.count)
-        println("Words: " + termCounts.map{case (word, count) => count}.reduce(_ + _))
+        println("\nTweets: " + corpus.count)
+        println("AvgLogLikelihood: " + avgLogLikelihood)
+        println("Words: " + termCounts.map{case (word, count) => count}.reduce(_ + _) + "\n")
 
         // Print topics, showing top-weighted 10 terms for each topic.
         val topicIndices = ldaModel.describeTopics(maxTermsPerTopic = numWordsByTopics)
