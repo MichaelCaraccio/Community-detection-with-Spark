@@ -82,7 +82,7 @@ class CassandraUtils {
      * @param RDD[Edge[String]] $edge - graph's edge
      * @return Unit
      */
-    def getTweetsContentFromEdge(sc:SparkContext, edge:RDD[Edge[String]]): RDD[String] = {
+    def getTweetsContentFromEdge(sc:SparkContext, edge:RDD[Edge[String]], displayResult:Boolean): RDD[String] = {
 
         println(color("\nCall getTweetsContentFromEdge" , RED))
 
@@ -103,7 +103,10 @@ class CassandraUtils {
             }
         }
 
-        //result.foreach(println(_))
+        // Display results
+        if(displayResult){
+            result.foreach(println(_))
+        }
 
         // return
         sc.parallelize(result)

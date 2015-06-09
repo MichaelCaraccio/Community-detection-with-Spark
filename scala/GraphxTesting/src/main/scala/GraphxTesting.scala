@@ -143,15 +143,21 @@ object GraphxTesting{
         // LDA
         // 1. Get every tweets from the graph and store it in corpus
         // 2. Call LDA method
-        val corpus = time { cu getTweetsContentFromEdge(sc, graph.edges) }
+        val corpus = time { cu getTweetsContentFromEdge(sc, graph.edges, true) }
         corpus.foreach(println(_))
 
         val numTopics = 10
         val numIterations = 10
         val numWordsByTopics = 10
         val numStopwords  = 20
-        time { mu getLDA(sc, corpus, numTopics, numIterations, numWordsByTopics, numStopwords) }
+        time { mu getLDA(sc, corpus, numTopics, numIterations, numWordsByTopics, numStopwords, true) }
         */
+
+
+        /*
+        println("\n**************************************************************")
+        println("                       FIRST EXAMPLE                          ")
+        println("**************************************************************")
 
 
         println("\n--------------------------------------------------------------")
@@ -175,7 +181,7 @@ object GraphxTesting{
         println("Third Step - Get Tweets from Edges")
         println("--------------------------------------------------------------")
 
-        val corpus = time { cu getTweetsContentFromEdge(sc, graph_2.edges) }
+        val corpus = time { cu getTweetsContentFromEdge(sc, graph_2.edges, true) }
         corpus.foreach(println(_))
 
         println("\n--------------------------------------------------------------")
@@ -186,15 +192,109 @@ object GraphxTesting{
         val numIterations = 10
         val numWordsByTopics = 10
         val numStopwords  = 20
-        time { mu getLDA(sc, corpus, numTopics, numIterations, numWordsByTopics, numStopwords) }
+        time { mu getLDA(sc, corpus, numTopics, numIterations, numWordsByTopics, numStopwords, true) }*/
 
 
-        //println(sccGraph)
-        /*sccGraph.edges.collect.foreach(println(_))
-        sccGraph.edges.count
 
-        sccGraph.vertices.collect.foreach(println(_))
-        sccGraph.vertices.count*/
+        println("\n**************************************************************")
+        println("                       SECOND EXAMPLE                         ")
+        println("**************************************************************")
+
+        println("\n--------------------------------------------------------------")
+        println("First Step - Split community : \n" +
+            "\t     Connected Components algorithm to find different\n" +
+            "\t     communities")
+        println("--------------------------------------------------------------")
+
+        time { cc(graph, graph.vertices) }
+
+        val subGraphes = splitCommunity(graph, users, false)
+
+        println("\n--------------------------------------------------------------")
+        println("Second Step - Calculate LDA for every communities\n" +
+            "\t 1. Get Tweets from Edges\n" +
+            "\t 2. LDA Algorithm")
+        println("--------------------------------------------------------------")
+        var iComm = 1
+        for (community <- subGraphes){
+            println("--------------------------")
+            println("Community : " + iComm)
+            println("--------------------------")
+            //community.edges.collect().foreach(println(_))
+            community.vertices.collect().foreach(println(_))
+
+            println("--------------------------")
+            println("Get Tweets from Edges")
+            println("--------------------------")
+            val corpus = time { cu getTweetsContentFromEdge(sc, community.edges, false) }
+
+            println("--------------------------")
+            println("LDA Algorithm")
+            println("--------------------------")
+            val numTopics = 5
+            val numIterations = 10
+            val numWordsByTopics = 5
+            val numStopwords  = 0
+            time { mu getLDA(sc, corpus, numTopics, numIterations, numWordsByTopics, numStopwords, true) }
+
+            iComm +=1
+        }
+    }
+
+    /**
+     * splitCommunity
+     *
+     * Find and split communities in graph
+     *
+     * @param Graph[String,String] $graph - Graph element
+     * @param RDD[(VertexId, (String))] $users - Vertices
+     * @param Boolean $displayResult - if true, display println
+     * @return ArrayBuffer[Graph[String,String]] - Contains one graph per community
+     *
+     */
+    def splitCommunity(graph:Graph[String,String],users:RDD[(VertexId, (String))], displayResult:Boolean): ArrayBuffer[Graph[String,String]] ={
+
+        // Find the connected components
+        val cc = graph.connectedComponents().vertices
+
+        // Join the connected components with the usernames and id
+        // The result is an RDD not a Graph
+        val ccByUsername = users.join(cc).map {
+            case (id, (username, cc)) => (id, username, cc)
+        }
+
+        // Print the result
+        val lowerIDPerCommunity = ccByUsername.map{ case (id, username, cc) => cc }.distinct()
+
+        // Result will be stored in an array
+        var result = ArrayBuffer[Graph[String,String]]()
+
+        for (id <- lowerIDPerCommunity.toArray){
+
+            //println("\nCommunity ID : " + id)
+
+            val subGraphVertices = ccByUsername.filter{_._3 == id}.map { case (id, username, cc) => (id, username)}
+
+            //subGraphVertices.foreach(println(_))
+
+            // Create a new graph
+            // And remove missing vertices as well as the edges to connected to them
+            var tempGraph = Graph(subGraphVertices, graph.edges).subgraph(vpred = (id, username) => username != null)
+
+            result += tempGraph
+        }
+
+        // Display communities
+        if(displayResult){
+            println("\nCommunities found " + result.size)
+            for (community <- result) {
+                println("-----------------------")
+                //community.edges.collect().foreach(println(_))
+                community.vertices.collect().foreach(println(_))
+            }
+        }
+
+        return result
     }
 
     /**

@@ -34,7 +34,7 @@ class MllibUtils {
      *
      * @return Unit
      */
-    def getLDA(sc:SparkContext, corpus:RDD[String], numTopics:Int, numIterations:Int, numWordsByTopics:Int, numStopwords:Int): Unit ={
+    def getLDA(sc:SparkContext, corpus:RDD[String], numTopics:Int, numIterations:Int, numWordsByTopics:Int, numStopwords:Int, displayResult:Boolean): Unit ={
 
         println(color("\nCall GetLDA" , RED))
 
@@ -49,16 +49,15 @@ class MllibUtils {
 
         // Choose the vocabulary
         //   termCounts: Sorted list of (term, termCount) pairs
-        val termCounts: Array[(String, Long)] =
-            tokenized.flatMap(_.map(_ -> 1L)).reduceByKey(_ + _).collect().sortBy(-_._2)
+        val termCounts: Array[(String, Long)] = tokenized.flatMap(_.map(_ -> 1L)).reduceByKey(_ + _).collect().sortBy(-_._2)
 
 
         //println("\nvocabArray\n")
         //termCounts.foreach(x => println("Word: "+x._1.toString + "   Count: " +x._2.toString))
 
         //   vocabArray: Chosen vocab (removing common terms)
-        val vocabArray: Array[String] =
-            termCounts.takeRight(termCounts.size - numStopwords).map(_._1)
+        val vocabArray: Array[String] = termCounts.takeRight(termCounts.size - numStopwords).map(_._1)
+
         //   vocab: Map term -> term index
         val vocab: Map[String, Int] = vocabArray.zipWithIndex.toMap
 
@@ -95,18 +94,21 @@ class MllibUtils {
 
         val avgLogLikelihood = ldaModel.logLikelihood / documents.count()
 
-        println("\nTweets: " + corpus.count)
-        println("AvgLogLikelihood: " + avgLogLikelihood)
-        println("Words: " + termCounts.map{case (word, count) => count}.reduce(_ + _) + "\n")
-
         // Print topics, showing top-weighted 10 terms for each topic.
-        val topicIndices = ldaModel.describeTopics(maxTermsPerTopic = numWordsByTopics)
-        topicIndices.foreach { case (terms, termWeights) =>
-            println("TOPIC:")
-            terms.zip(termWeights).foreach { case (term, weight) =>
-                println(s"${vocabArray(term.toInt)}\t\t$weight")
+        if(displayResult) {
+            println("\nTweets: " + corpus.count)
+            println("AvgLogLikelihood: " + avgLogLikelihood)
+            println("Words: " + termCounts.map { case (word, count) => count }.reduce(_ + _) + "\n")
+
+
+            val topicIndices = ldaModel.describeTopics(maxTermsPerTopic = numWordsByTopics)
+            topicIndices.foreach { case (terms, termWeights) =>
+                println("TOPIC:")
+                terms.zip(termWeights).foreach { case (term, weight) =>
+                    println(s"${vocabArray(term.toInt)}\t\t$weight")
+                }
+                println()
             }
-            println()
         }
     }
 }
