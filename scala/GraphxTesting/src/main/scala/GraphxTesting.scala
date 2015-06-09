@@ -1,6 +1,7 @@
 import CassandraUtils.CassandraUtils
 import MllibUtils.MllibUtils
-import KCoreDecomposition.KCoreDecomposition
+import CommunityUtils.CommunityUtils
+
 
 import scala.collection.mutable.ArrayBuffer
 
@@ -25,7 +26,7 @@ import scala.reflect.ClassTag
 // http://ampcamp.berkeley.edu/big-data-mini-course/graph-analytics-with-graphx.html
 // https://spark.apache.org/docs/latest/graphx-programming-guide.html
 
-object GraphxTesting{
+object GraphxTesting {
 
     val RED = "\033[1;30m"
     val ENDC = "\033[0m"
@@ -40,7 +41,7 @@ object GraphxTesting{
 
         val cu = new CassandraUtils
         val mu = new MllibUtils
-        val kd = new KCoreDecomposition
+        val comUtils = new CommunityUtils
 
         // Display only warning and infos messages
         Logger.getLogger("org").setLevel(Level.ERROR)
@@ -65,7 +66,12 @@ object GraphxTesting{
         // Build the initial Graph
         val graph = Graph(users, relationships, defaultUser).cache()
 
+
         /*
+        println("\n**************************************************************")
+        println("                       TEST METHODS                           ")
+        println("**************************************************************")
+
         println("\n--------------------------------------------------------------")
         println("Operations on tweets")
         println("--------------------------------------------------------------\n")
@@ -95,26 +101,26 @@ object GraphxTesting{
 
         // Count in and out degrees
         time { inAndOutDegrees(graph) }
-        */
-        /*
+
+
         println("\n--------------------------------------------------------------")
         println("Community detection")
         println("--------------------------------------------------------------\n")
 
         // Call ConnectedComponents
-        time { cc(graph, users) }
+        time { comUtils cc(graph, users) }
 
         // Call StronglyConnectedComponents
-        time { scc(graph, 1) }
+        time { comUtils scc(graph, 1) }
 
         // Get triangle Count
-        time { getTriangleCount(graph, users) }
+        time { comUtils getTriangleCount(graph, users) }
 
         // Get PageRank
         time { getPageRank(graph, users) }
 
         // K-Core decomposition
-        time { kd run(graph, users, 4, 2) }
+        time { comUtils getKCoreGraph(graph, users, 4, 2) }
 
         // LabelPropagation
         val graphLabelPropagation = time { LabelPropagation.run(graph, 4).cache() }
@@ -135,8 +141,8 @@ object GraphxTesting{
 
         graphLabelPropagation.edges.collect.foreach(println(_))
 
-        */
-        /*println("\n--------------------------------------------------------------")
+
+        println("\n--------------------------------------------------------------")
         println("Mllib")
         println("--------------------------------------------------------------\n")
 
@@ -151,10 +157,10 @@ object GraphxTesting{
         val numWordsByTopics = 10
         val numStopwords  = 20
         time { mu getLDA(sc, corpus, numTopics, numIterations, numWordsByTopics, numStopwords, true) }
-        */
 
 
-        /*
+
+
         println("\n**************************************************************")
         println("                       FIRST EXAMPLE                          ")
         println("**************************************************************")
@@ -165,7 +171,7 @@ object GraphxTesting{
         println("--------------------------------------------------------------")
 
         // K-Core decomposition
-        val graph_2 = time { kd getKCoreGraph(graph, users, 5, 5) }.cache()
+        val graph_2 = time { comUtils getKCoreGraph(graph, users, 5, 5) }.cache()
 
         graph_2.edges.collect.foreach(println(_))
         graph_2.vertices.collect.foreach(println(_))
@@ -175,24 +181,25 @@ object GraphxTesting{
         println("--------------------------------------------------------------")
 
         // Call ConnectedComponents
-        time { cc(graph_2, graph_2.vertices) }
+        time { comUtils cc(graph_2, graph_2.vertices) }
 
         println("\n--------------------------------------------------------------")
         println("Third Step - Get Tweets from Edges")
         println("--------------------------------------------------------------")
 
-        val corpus = time { cu getTweetsContentFromEdge(sc, graph_2.edges, true) }
+        val corpusWords = time { cu getTweetsContentFromEdge(sc, graph_2.edges, true) }
         corpus.foreach(println(_))
 
         println("\n--------------------------------------------------------------")
         println("Fourth Step - LDA Algorithm")
         println("--------------------------------------------------------------")
 
-        val numTopics = 10
-        val numIterations = 10
-        val numWordsByTopics = 10
-        val numStopwords  = 20
-        time { mu getLDA(sc, corpus, numTopics, numIterations, numWordsByTopics, numStopwords, true) }*/
+        val nTopics = 10
+        val nIterations = 10
+        val nWordsByTopics = 10
+        val nStopwords  = 20
+        time { mu getLDA(sc, corpusWords, nTopics, nIterations, nWordsByTopics, nStopwords, true) }
+        */
 
 
 
@@ -206,9 +213,9 @@ object GraphxTesting{
             "\t     communities")
         println("--------------------------------------------------------------")
 
-        time { cc(graph, graph.vertices) }
+        time { comUtils cc(graph, graph.vertices) }
 
-        val subGraphes = splitCommunity(graph, users, false)
+        val subGraphes = comUtils splitCommunity(graph, users, false)
 
         println("\n--------------------------------------------------------------")
         println("Second Step - Calculate LDA for every communities\n" +
@@ -241,103 +248,9 @@ object GraphxTesting{
         }
     }
 
-    /**
-     * splitCommunity
-     *
-     * Find and split communities in graph
-     *
-     * @param Graph[String,String] $graph - Graph element
-     * @param RDD[(VertexId, (String))] $users - Vertices
-     * @param Boolean $displayResult - if true, display println
-     * @return ArrayBuffer[Graph[String,String]] - Contains one graph per community
-     *
-     */
-    def splitCommunity(graph:Graph[String,String],users:RDD[(VertexId, (String))], displayResult:Boolean): ArrayBuffer[Graph[String,String]] ={
 
-        // Find the connected components
-        val cc = graph.connectedComponents().vertices
 
-        // Join the connected components with the usernames and id
-        // The result is an RDD not a Graph
-        val ccByUsername = users.join(cc).map {
-            case (id, (username, cc)) => (id, username, cc)
-        }
 
-        // Print the result
-        val lowerIDPerCommunity = ccByUsername.map{ case (id, username, cc) => cc }.distinct()
-
-        // Result will be stored in an array
-        var result = ArrayBuffer[Graph[String,String]]()
-
-        for (id <- lowerIDPerCommunity.toArray){
-
-            //println("\nCommunity ID : " + id)
-
-            val subGraphVertices = ccByUsername.filter{_._3 == id}.map { case (id, username, cc) => (id, username)}
-
-            //subGraphVertices.foreach(println(_))
-
-            // Create a new graph
-            // And remove missing vertices as well as the edges to connected to them
-            var tempGraph = Graph(subGraphVertices, graph.edges).subgraph(vpred = (id, username) => username != null)
-
-            result += tempGraph
-        }
-
-        // Display communities
-        if(displayResult){
-            println("\nCommunities found " + result.size)
-            for (community <- result) {
-                println("-----------------------")
-                //community.edges.collect().foreach(println(_))
-                community.vertices.collect().foreach(println(_))
-            }
-        }
-
-        return result
-    }
-
-    /**
-     * getTriangleCount
-     *
-     * Compute the number of triangles passing through each vertex.
-     *
-     * @param Graph[String,String] $graph - Graph element
-     * @param RDD[(VertexId, (String))] $users - Vertices
-     * @return Unit
-     *
-     * @see [[org.apache.spark.graphx.lib.TriangleCount$#run]]
-     */
-    def getTriangleCount(graph:Graph[String,String], users:RDD[(VertexId, (String))]): Unit ={
-
-        println(color("\nCall getTriangleCount" , RED))
-
-        // Sort edges ID srcID < dstID
-        val edges = graph.edges.map { e =>
-            if (e.srcId < e.dstId) {
-                Edge(e.srcId, e.dstId, e.attr)
-            }
-            else {
-                Edge(e.dstId, e.srcId, e.attr)
-            }
-        }
-
-        // Temporary graph
-        val newGraph = Graph(users, edges, "").cache()
-
-        // Find the triangle count for each vertex
-        // TriangleCount requires the graph to be partitioned
-        val triCounts = newGraph.partitionBy(PartitionStrategy.RandomVertexCut).cache().triangleCount().vertices
-
-        val triCountByUsername = users.join(triCounts).map {
-            case (id, (username, rank)) => (id, username, rank)
-        }
-
-        println("Display triangle's sum for each user")
-        triCountByUsername.foreach(println)
-
-        println("\nTotal: " + triCountByUsername.map{ case (id, username, rank) => rank }.distinct().count() + "\n")
-    }
 
     /**
      * @constructor getPageRank
@@ -402,64 +315,7 @@ object GraphxTesting{
             case (id, u) => println(s"User $id is called ${u.name} and received ${u.inDeg} tweets and send ${u.outDeg}.")
         }
     }
-    /**
-     * @constructor ConnectedComponents
-     *
-     * Compute the connected component membership of each vertex and return a graph with the vertex
-     * value containing the lowest vertex id in the connected component containing that vertex.
-     *
-     * @param Graph[String,String] $graph - Graph element
-     * @param RDD[(VertexId, (String))] $users - Vertices
-     * @return Unit
-     *
-     * @see [[org.apache.spark.graphx.lib.ConnectedComponents$#run]]
-     */
-    def cc(graph:Graph[String,String], users:RDD[(VertexId, (String))]): Unit ={
-        println(color("\nCall ConnectedComponents" , RED))
 
-        // Find the connected components
-        val cc = graph.connectedComponents().vertices
-
-        // Join the connected components with the usernames and id
-        val ccByUsername = users.join(cc).map {
-            case (id, (username, cc)) => (id, username, cc)
-        }
-        // Print the result
-        println(ccByUsername.collect().sortBy(_._3).mkString("\n"))
-
-        println("\nTotal groups: " + ccByUsername.map{ case (id, username, cc) => cc }.distinct().count() + "\n")
-    }
-
-
-    /**
-     * @constructor StronglyConnectedComponents
-     *
-     * Compute the strongly connected component (SCC) of each vertex and return a graph with the
-     * vertex value containing the lowest vertex id in the SCC containing that vertex.
-     *
-     * Display edges's membership and total groups
-     *
-     * @param Graph[String,String] $graph - Graph element
-     * @param Int $iteration - Number of iteration
-     * @return Unit
-     */
-    def scc(graph:Graph[String,String], iteration:Int): Unit ={
-
-        println(color("\nCall StronglyConnectedComponents : iteration : " + iteration , RED))
-        val sccGraph = graph.stronglyConnectedComponents(5)
-
-        val connectedGraph = sccGraph.vertices.map {
-            case (member, leaderGroup) => s"$member is in the group of $leaderGroup's edge"
-        }
-
-        val totalGroups = sccGraph.vertices.map {
-            case (member, leaderGroup) => leaderGroup
-        }
-
-        connectedGraph.collect.foreach(println)
-
-        println("\nTotal groups: " + totalGroups.distinct().count() + "\n")
-    }
 
     /**
      * @constructor findUserByID

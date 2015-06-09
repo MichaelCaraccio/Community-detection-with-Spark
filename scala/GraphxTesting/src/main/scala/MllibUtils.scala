@@ -4,7 +4,6 @@ import scala.collection.mutable
 import org.apache.spark.mllib.clustering._
 import org.apache.spark.mllib.linalg.{Vector, DenseMatrix, Matrix, Vectors}
 
-import org.apache.spark.mllib.linalg.{Vector, Vectors}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.SparkContext
 import org.apache.spark.SparkContext._
