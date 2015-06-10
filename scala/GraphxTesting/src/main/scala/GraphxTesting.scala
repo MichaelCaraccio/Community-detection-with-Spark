@@ -4,6 +4,7 @@ import CommunityUtils.CommunityUtils
 
 
 import scala.collection.mutable.ArrayBuffer
+import scala.math._
 
 import org.apache.spark.SparkContext
 import org.apache.spark.SparkContext._
@@ -120,7 +121,7 @@ object GraphxTesting {
         time { getPageRank(graph, users) }
 
         // K-Core decomposition
-        time { comUtils getKCoreGraph(graph, users, 4, 2) }
+        time { comUtils getKCoreGraph(graph, users, 4) }
 
         // LabelPropagation
         val graphLabelPropagation = time { LabelPropagation.run(graph, 4).cache() }
@@ -171,7 +172,7 @@ object GraphxTesting {
         println("--------------------------------------------------------------")
 
         // K-Core decomposition
-        val graph_2 = time { comUtils getKCoreGraph(graph, users, 5, 5) }.cache()
+        val graph_2 = time { comUtils getKCoreGraph(graph, users, 5) }.cache()
 
         graph_2.edges.collect.foreach(println(_))
         graph_2.vertices.collect.foreach(println(_))
@@ -202,7 +203,7 @@ object GraphxTesting {
         */
 
 
-
+    /*
         println("\n**************************************************************")
         println("                       SECOND EXAMPLE                         ")
         println("**************************************************************")
@@ -213,9 +214,9 @@ object GraphxTesting {
             "\t     communities")
         println("--------------------------------------------------------------")
 
-        time { comUtils cc(graph, graph.vertices) }
+        //time { comUtils cc(graph, graph.vertices) }
 
-        val subGraphes = comUtils splitCommunity(graph, users, false)
+        val subGraphes = time { comUtils splitCommunity(graph, users, false) }
 
         println("\n--------------------------------------------------------------")
         println("Second Step - Calculate LDA for every communities\n" +
@@ -246,11 +247,52 @@ object GraphxTesting {
 
             iComm +=1
         }
+        */
+
+
+        // Generate Vertices
+        val collectionVertices = ArrayBuffer[(Long, String)]()
+        collectionVertices += ((2732329846L, "Michael"))
+        collectionVertices += ((132988448L, "yolo"))
+
+        // Convert it to RDD
+        val VerticesRDD= ArrayToVertices(sc, collectionVertices)
+
+        // Generate Hash
+        var random = abs(murmurHash64A("MichaelCaraccio".getBytes))
+
+        // Add edges
+        val collectionEdge = ArrayBuffer[Edge[String]]()
+        collectionEdge += Edge(random, 132988448L, "606460188367974400")
+        collectionEdge += Edge(2732329846L, 2941487254L, "606461336986386435")
+        collectionEdge += Edge(2732329846L, 601389784L, "606461384767897600")
+
+        // Convert it to RDD
+        val EdgeRDD = ArrayToEdges(sc, collectionEdge)
+
+        // Create Graph
+        val testGraph = Graph(VerticesRDD, EdgeRDD)
+
+        testGraph.vertices.collect.foreach(println(_))
+        testGraph.edges.collect.foreach(println(_))
     }
 
+    private val defaultSeed = 0xadc83b19L
 
+    def murmurHash64A(data: Seq[Byte], seed: Long = defaultSeed): Long = {
+        val m = 0xc6a4a7935bd1e995L
+        val r = 47
 
+        val f: Long => Long = m.*
+        val g: Long => Long = x => x ^ (x >>> r)
 
+        val h = data.grouped(8).foldLeft(seed ^ f(data.length)) { case (y, xs) =>
+            val k = xs.foldRight(0L)((b, x) => (x << 8) + (b & 0xff))
+            val j: Long => Long = if (xs.length == 8) f compose g compose f else identity
+            f(y ^ j(k))
+        }
+        (g compose f compose g)(h)
+    }
 
     /**
      * @constructor getPageRank
@@ -387,6 +429,48 @@ object GraphxTesting {
         println("Elapsed time: " + (t1 - t0) / 1000000000.0 + " seconds")
         result
     }
+
+
+    /**
+     * @constructor ArrayToVertices
+     *
+     * Convert ArrayBuffer to RDD containing Vertices
+     *
+     * @param SparkContext - $sc - SparkContext
+     * @param ArrayBuffer[(Long, (String))] - $collection - Contains vertices
+     *
+     * @return RDD[Edge[String]] - RDD of vertices
+     */
+    def ArrayToVertices(sc:SparkContext, collection:ArrayBuffer[(Long, (String))]): RDD[(VertexId, (String))] ={
+        sc.parallelize(collection)
+    }
+
+    /**
+     * @constructor ArrayToEdges
+     *
+     * Convert ArrayBuffer to RDD containing Edges
+     *
+     * @param SparkContext - $sc - SparkContext
+     * @param ArrayBuffer[Edge[String]] - $collection - Contains edges
+     *
+     * @return RDD[Edge[String]] - RDD of edges
+     */
+    def ArrayToEdges(sc:SparkContext, collection:ArrayBuffer[Edge[String]]): RDD[Edge[String]] ={
+        sc.parallelize(collection)
+    }
+
+
+    /**
+     * @constructor
+     *
+     *
+     *
+     * @param
+     * @return
+     */
+    /*def isVerticeInGraph(): Unit ={
+
+    }*/
 
     /**
      * @constructor initGraph

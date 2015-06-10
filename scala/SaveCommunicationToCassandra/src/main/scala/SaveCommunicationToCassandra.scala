@@ -142,7 +142,7 @@ object SaveCommunicationToCassandra{
             val currentContext = rdd.context
             
             // RDD -> Array()
-            var tabValues = rdd.collect()
+            val tabValues = rdd.collect()
             
             // For each tweets in RDD
             for(item <- tabValues.toArray) { 

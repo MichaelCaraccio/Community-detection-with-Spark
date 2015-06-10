@@ -35,8 +35,12 @@ class CommunityUtils extends Logging with Serializable {
      */
     def splitCommunity(graph:Graph[String,String],users:RDD[(VertexId, (String))], displayResult:Boolean): ArrayBuffer[Graph[String,String]] ={
 
+        println(color("\nCall SplitCommunity" , RED))
+
+        val graph_2 = getKCoreGraph(graph, users, 4, false).cache()
+
         // Find the connected components
-        val cc = graph.connectedComponents().vertices
+        val cc = graph_2.connectedComponents().vertices
 
         // Join the connected components with the usernames and id
         // The result is an RDD not a Graph
@@ -49,10 +53,12 @@ class CommunityUtils extends Logging with Serializable {
 
         // Result will be stored in an array
         var result = ArrayBuffer[Graph[String,String]]()
-
+        println("--------------------------")
+        println("Total community found: " + lowerIDPerCommunity.toArray.size)
+        println("--------------------------")
         for (id <- lowerIDPerCommunity.toArray){
 
-            //println("\nCommunity ID : " + id)
+            println("\nCommunity ID : " + id)
 
             val subGraphVertices = ccByUsername.filter{_._3 == id}.map { case (id, username, cc) => (id, username)}
 
@@ -60,7 +66,7 @@ class CommunityUtils extends Logging with Serializable {
 
             // Create a new graph
             // And remove missing vertices as well as the edges to connected to them
-            var tempGraph = Graph(subGraphVertices, graph.edges).subgraph(vpred = (id, username) => username != null)
+            var tempGraph = Graph(subGraphVertices, graph_2.edges).subgraph(vpred = (id, username) => username != null)
 
             result += tempGraph
         }
@@ -202,35 +208,37 @@ class CommunityUtils extends Logging with Serializable {
      * the k-core.
      *
      * @note This method has the advantage of returning not just a single kcore of the
-     * graph but will yield all the cores for all k in [1, kmax].
+     * graph but will yield all the cores for k > kmin.
      */
     def getKCoreGraph[VD: ClassTag, ED: ClassTag](graph: Graph[VD, ED],
                                                   users:RDD[(VertexId, (String))],
-                                                  kmax: Int,
-                                                  kmin: Int = 1): Graph[String,ED] = {
+                                                  kmin: Int,
+                                                  displayResult:Boolean): Graph[String,ED] = {
 
         // Graph[(Int, Boolean), ED] - boolean indicates whether it is active or not
         var g = graph.outerJoinVertices(graph.degrees)((vid, oldData, newData) => newData.getOrElse(0)).cache
         val degrees = graph.degrees
-        val numVertices = degrees.count
 
         println(color("\nCall KCoreDecomposition" , RED))
 
-        logWarning(s"Number of vertices: $numVertices")
-        logWarning(s"Degree sample: ${degrees.take(10).mkString(", ")}")
-        logWarning(s"Degree distribution: " + degrees.map{ case (vid,data) => (data, 1)}.reduceByKey((_+_)).collect().mkString(", "))
-        logWarning(s"Degree distribution: " + degrees.map{ case (vid,data) => (data, 1)}.reduceByKey((_+_)).take(10).mkString(", "))
-
-        val curK = kmin
-
-        g = computeCurrentKCore(g, curK).cache
-        val testK = curK
-        val vCount = g.vertices.filter{ case (vid, vd) => vd >= curK}.count()
+        g = computeCurrentKCore(g, kmin).cache
+        val testK = kmin
+        val vCount = g.vertices.filter{ case (vid, vd) => vd >= kmin}.count()
         val eCount = g.triplets.map{t => t.srcAttr >= testK && t.dstAttr >= testK }.count()
 
-        val v = g.vertices.filter{ case (vid, vd) => vd >= curK}
+        val v = g.vertices.filter{ case (vid, vd) => vd >= kmin}
 
-        logWarning(s"K=$curK, V=$vCount, E=$eCount")
+        // Display informations
+        if(displayResult) {
+
+            val numVertices = degrees.count
+
+            logWarning(s"Number of vertices: $numVertices")
+            logWarning(s"Degree sample: ${degrees.take(10).mkString(", ")}")
+            logWarning(s"Degree distribution: " + degrees.map { case (vid, data) => (data, 1) }.reduceByKey((_ + _)).collect().mkString(", "))
+            logWarning(s"Degree distribution: " + degrees.map { case (vid, data) => (data, 1) }.reduceByKey((_ + _)).take(10).mkString(", "))
+            logWarning(s"K=$kmin, V=$vCount, E=$eCount")
+        }
 
         // Create new RDD users
         val newUser = users.join(v).map {
@@ -245,7 +253,7 @@ class CommunityUtils extends Logging with Serializable {
     }
 
     def computeCurrentKCore[ED: ClassTag](graph: Graph[Int, ED], k: Int) = {
-        logWarning(s"Computing kcore for k=$k")
+        //logWarning(s"Computing kcore for k=$k")
         def sendMsg(et: EdgeTriplet[Int, ED]): Iterator[(VertexId, Int)] = {
             if (et.srcAttr < 0 || et.dstAttr < 0) {
                 // if either vertex has already been turned off we do nothing
