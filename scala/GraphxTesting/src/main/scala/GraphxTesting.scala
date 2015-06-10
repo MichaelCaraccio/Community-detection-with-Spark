@@ -1,7 +1,8 @@
 import CassandraUtils.CassandraUtils
 import MllibUtils.MllibUtils
 import CommunityUtils.CommunityUtils
-
+import GraphUtils.GraphUtils
+import RDDUtils.RDDUtils
 
 import scala.collection.mutable.ArrayBuffer
 import scala.math._
@@ -43,6 +44,8 @@ object GraphxTesting {
         val cu = new CassandraUtils
         val mu = new MllibUtils
         val comUtils = new CommunityUtils
+        val gu = new GraphUtils
+        val ru = new RDDUtils
 
         // Display only warning and infos messages
         Logger.getLogger("org").setLevel(Level.ERROR)
@@ -81,11 +84,11 @@ object GraphxTesting {
         time { displayAllCommunications(graph) }
 
         // Let's find user id
-        val id = time { findUserIDByName(graph, "Michael") }
+        val id = time { findUserIDByNameInGraph(graph, "Michael") }
         println("ID for user Michael is : " + id.toString)
 
         // Find username with user ID
-        val name = time { findUserNameByID(graph, 1) }
+        val name = time { findUserNameByIDInGraph(graph, 1) }
         println("Name for id 1 is : " + name.toString)
 
         // get tweet content with tweet ID
@@ -253,13 +256,13 @@ object GraphxTesting {
         // Generate Vertices
         val collectionVertices = ArrayBuffer[(Long, String)]()
         collectionVertices += ((2732329846L, "Michael"))
-        collectionVertices += ((132988448L, "yolo"))
+        collectionVertices += ((132988448L, "Jean"))
 
         // Convert it to RDD
-        val VerticesRDD= ArrayToVertices(sc, collectionVertices)
+        val VerticesRDD= ru ArrayToVertices(sc, collectionVertices)
 
         // Generate Hash
-        var random = abs(murmurHash64A("MichaelCaraccio".getBytes))
+        val random = abs(gu murmurHash64A("MichaelCaraccio".getBytes))
 
         // Add edges
         val collectionEdge = ArrayBuffer[Edge[String]]()
@@ -268,7 +271,7 @@ object GraphxTesting {
         collectionEdge += Edge(2732329846L, 601389784L, "606461384767897600")
 
         // Convert it to RDD
-        val EdgeRDD = ArrayToEdges(sc, collectionEdge)
+        val EdgeRDD = ru ArrayToEdges(sc, collectionEdge)
 
         // Create Graph
         val testGraph = Graph(VerticesRDD, EdgeRDD)
@@ -277,142 +280,12 @@ object GraphxTesting {
         testGraph.edges.collect.foreach(println(_))
     }
 
-    private val defaultSeed = 0xadc83b19L
-
-    def murmurHash64A(data: Seq[Byte], seed: Long = defaultSeed): Long = {
-        val m = 0xc6a4a7935bd1e995L
-        val r = 47
-
-        val f: Long => Long = m.*
-        val g: Long => Long = x => x ^ (x >>> r)
-
-        val h = data.grouped(8).foldLeft(seed ^ f(data.length)) { case (y, xs) =>
-            val k = xs.foldRight(0L)((b, x) => (x << 8) + (b & 0xff))
-            val j: Long => Long = if (xs.length == 8) f compose g compose f else identity
-            f(y ^ j(k))
-        }
-        (g compose f compose g)(h)
-    }
-
-    /**
-     * @constructor getPageRank
-     *
-     * Run PageRank for a fixed number of iterations returning a graph with vertex attributes
-     * containing the PageRank and edge attributes the normalized edge weight.
-     *
-     * @param Graph[String,String] $graph - Graph element
-     * @param RDD[(VertexId, (String))] $users - Vertices
-     * @return Unit
-     *
-     * @see [[org.apache.spark.graphx.lib.PageRank$#run]]
-     */
-    def getPageRank(graph:Graph[String,String], users:RDD[(VertexId, (String))]): Unit ={
-
-        println(color("\nCall getPageRank" , RED))
-
-        val ranks = graph.pageRank(0.00001).vertices
-
-        val ranksByUsername = users.join(ranks).map {
-            case (id, (username, rank)) => (id, username, rank)
-        }
-
-        // Print the result descending
-        println(ranksByUsername.collect().sortBy(_._3).reverse.mkString("\n"))
-    }
-
-    /**
-     * @constructor inAndOutDegrees
-     *
-     * @param Graph[String,String] $graph - Graph element
-     * @return Unit
-     *
-     */
-    def inAndOutDegrees(graph:Graph[String,String]): Unit ={
-
-        println(color("\nCall inAndOutDegrees", RED))
-
-        // Create User class
-        case class User(name: String, // Username
-                        inDeg: Int,   // Received tweets
-                        outDeg: Int)  // Sent tweets
-
-        // Create user Graph
-        // def mapVertices[VD2](map: (VertexID, VD) => VD2): Graph[VD2, ED]
-        val initialUserGraph: Graph[User, String] = graph.mapVertices {
-            case (id, (name)) => User(name, 0, 0)
-        }
-
-        //initialUserGraph.edges.collect.foreach(println(_))
 
 
-        // Fill in the degree informations (out and in degrees)
-        val userGraph = initialUserGraph.outerJoinVertices(initialUserGraph.inDegrees) {
-            case (id, u, inDegOpt) => User(u.name, inDegOpt.getOrElse(0), u.outDeg)
-        }.outerJoinVertices(initialUserGraph.outDegrees) {
-            case (id, u, outDegOpt) => User(u.name, u.inDeg, outDegOpt.getOrElse(0))
-        }
-
-        // Display the userGraph
-        userGraph.vertices.foreach {
-            case (id, u) => println(s"User $id is called ${u.name} and received ${u.inDeg} tweets and send ${u.outDeg}.")
-        }
-    }
 
 
-    /**
-     * @constructor findUserByID
-     *
-     * find user ID with username
-     *
-     * @param Graph[String,String] $graph - Graph element
-     * @param Int $userID - User id
-     * @return String - if success : username | failure : "user not found"
-     */
-    def findUserNameByID (graph:Graph[String,String], userID:Int) : String = {
-        println(color("\nCall : findUserNameWithID", RED))
 
-        graph.vertices.filter{ case (id, name) => id == userID }.collect.foreach {
-            (e: (org.apache.spark.graphx.VertexId, String)) => return e._2
-        }
-        "user not found"
-    }
 
-    /**
-     * @constructor findUserIDByName
-     *
-     * find username with id
-     *
-     * @param Graph[String,String] $graph - Graph element
-     * @param String $userName - Username
-     * @return String - if success : id found | failure : "0"
-     */
-    def findUserIDByName(graph:Graph[String,String], userName:String) : String = {
-        println(color("\nCall : findUserIDWithName", RED))
-
-        graph.vertices.filter( _._2 == "Michael" ).collect.foreach {
-            (e: (org.apache.spark.graphx.VertexId, String)) => return e._1.toString
-        }
-        "0"
-    }
-
-    /**
-     * @constructor displayAllCommunications
-     *
-     * display all communications between users
-     *
-     * @param Graph[String,String] $graph - Graph element
-     * @return Unit
-     */
-    def displayAllCommunications(graph:Graph[String,String]): Unit ={
-
-        println(color("\nCall : displayAllCommunications", RED))
-        println("Users communications: ")
-
-        val facts: RDD[String] = graph.triplets.map(triplet =>  triplet.srcAttr + " communicate with " +
-            triplet.dstAttr + " with tweet id " + triplet.attr)
-
-        facts.collect.foreach(println(_))
-    }
 
     /**
      * @constructor time
@@ -429,36 +302,6 @@ object GraphxTesting {
         println("Elapsed time: " + (t1 - t0) / 1000000000.0 + " seconds")
         result
     }
-
-
-    /**
-     * @constructor ArrayToVertices
-     *
-     * Convert ArrayBuffer to RDD containing Vertices
-     *
-     * @param SparkContext - $sc - SparkContext
-     * @param ArrayBuffer[(Long, (String))] - $collection - Contains vertices
-     *
-     * @return RDD[Edge[String]] - RDD of vertices
-     */
-    def ArrayToVertices(sc:SparkContext, collection:ArrayBuffer[(Long, (String))]): RDD[(VertexId, (String))] ={
-        sc.parallelize(collection)
-    }
-
-    /**
-     * @constructor ArrayToEdges
-     *
-     * Convert ArrayBuffer to RDD containing Edges
-     *
-     * @param SparkContext - $sc - SparkContext
-     * @param ArrayBuffer[Edge[String]] - $collection - Contains edges
-     *
-     * @return RDD[Edge[String]] - RDD of edges
-     */
-    def ArrayToEdges(sc:SparkContext, collection:ArrayBuffer[Edge[String]]): RDD[Edge[String]] ={
-        sc.parallelize(collection)
-    }
-
 
     /**
      * @constructor

@@ -140,7 +140,7 @@ object SaveCommunicationToCassandra{
         commStream.foreachRDD(rdd => {
             // Getting current context
             val currentContext = rdd.context
-            
+
             // RDD -> Array()
             val tabValues = rdd.collect()
             
@@ -184,7 +184,7 @@ object SaveCommunicationToCassandra{
             val currentContext = rdd.context
             
             // RDD -> Array()
-            var tabValues = rdd.collect()
+            val tabValues = rdd.collect()
             
             /*var test = rdd.map{status => (status._1,
                                           status._2,
