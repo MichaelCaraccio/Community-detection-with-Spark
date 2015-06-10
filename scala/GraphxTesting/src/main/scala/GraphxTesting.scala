@@ -280,13 +280,6 @@ object GraphxTesting {
         testGraph.edges.collect.foreach(println(_))
     }
 
-
-
-
-
-
-
-
     /**
      * @constructor time
      *

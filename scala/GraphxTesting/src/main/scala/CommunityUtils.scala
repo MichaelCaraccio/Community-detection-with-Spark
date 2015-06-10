@@ -81,10 +81,8 @@ class CommunityUtils extends Logging with Serializable {
             }
         }
 
-        return result
+        result
     }
-
-
 
     /**
      * getTriangleCount
@@ -128,8 +126,6 @@ class CommunityUtils extends Logging with Serializable {
         println("\nTotal: " + triCountByUsername.map{ case (id, username, rank) => rank }.distinct().count() + "\n")
     }
 
-
-
     /**
      * @constructor ConnectedComponents
      *
@@ -157,7 +153,6 @@ class CommunityUtils extends Logging with Serializable {
 
         println("\nTotal groups: " + ccByUsername.map{ case (id, username, cc) => cc }.distinct().count() + "\n")
     }
-
 
     /**
      * @constructor StronglyConnectedComponents
@@ -188,8 +183,6 @@ class CommunityUtils extends Logging with Serializable {
 
         println("\nTotal groups: " + totalGroups.distinct().count() + "\n")
     }
-
-
 
     /**
      * Compute the k-core decomposition of the graph for all k <= kmax. This
@@ -249,7 +242,7 @@ class CommunityUtils extends Logging with Serializable {
         val gra = Graph(newUser, g.edges)
 
         // Remove missing vertices as well as the edges to connected to them
-        return gra.subgraph(vpred = (id, username) => username != null)
+        gra.subgraph(vpred = (id, username) => username != null)
     }
 
     def computeCurrentKCore[ED: ClassTag](graph: Graph[Int, ED], k: Int) = {
