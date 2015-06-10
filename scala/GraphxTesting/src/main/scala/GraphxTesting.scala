@@ -206,7 +206,7 @@ object GraphxTesting {
         */
 
 
-    /*
+
         println("\n**************************************************************")
         println("                       SECOND EXAMPLE                         ")
         println("**************************************************************")
@@ -250,7 +250,7 @@ object GraphxTesting {
 
             iComm +=1
         }
-        */
+
 
 
         // Generate Vertices
