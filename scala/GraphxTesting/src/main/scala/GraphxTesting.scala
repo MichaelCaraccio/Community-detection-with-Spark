@@ -6,6 +6,7 @@ import RDDUtils.RDDUtils
 
 import scala.collection.mutable.ArrayBuffer
 import scala.math._
+import org.apache.spark.mllib.linalg.{Vector, DenseMatrix, Matrix, Vectors}
 
 import org.apache.spark.SparkContext
 import org.apache.spark.SparkContext._
@@ -203,9 +204,9 @@ object GraphxTesting {
         val nWordsByTopics = 10
         val nStopwords  = 20
         time { mu getLDA(sc, corpusWords, nTopics, nIterations, nWordsByTopics, nStopwords, true) }
+
+
         */
-
-
 
         println("\n**************************************************************")
         println("                       SECOND EXAMPLE                         ")
@@ -246,7 +247,24 @@ object GraphxTesting {
             val numIterations = 10
             val numWordsByTopics = 5
             val numStopwords  = 0
-            time { mu getLDA(sc, corpus, numTopics, numIterations, numWordsByTopics, numStopwords, true) }
+
+            // Initialize LDA
+            time { mu initLDA(corpus, numTopics, numIterations, numStopwords) }
+
+            // Create documents
+            var result = ArrayBuffer[String]()
+            result += "Concentration parameter (commonly named) for the prior placed on documents' distributions over topics"
+            result += "Topic models automatically infer the topics discussed in a collection of documents. These topics can be used"
+            result += "Perhaps some merchant hath invited him, And from the mart he's somewhere gone to dinner."
+            result += "Good sister, let us dine and never fret: Time is their master, and, when they see time,"
+            result += "Why, headstrong liberty is lash'd with woe. There's nothing situate under heaven's eye"
+
+            val doc:RDD[String] = sc.parallelize(result)
+            val (newdoc:RDD[(Long, Vector)], newvocabArray) = time { mu createDocuments(doc, 20) }
+
+            // Find
+            time { mu findTopics(newdoc, newvocabArray, numWordsByTopics, true) }
+
 
             iComm +=1
         }
@@ -341,40 +359,40 @@ object GraphxTesting {
         // Create an RDD for edges
         val relationships: RDD[Edge[String]] =
             sc.parallelize(Array(
-                Edge(2732329846L, 132988448L, "606460188367974400"),
-                Edge(2732329846L, 2941487254L, "606461336986386435"),
-                Edge(2732329846L, 601389784L, "606461384767897600"),
-                Edge(601389784L, 2732329846L, "606461128055488512"),
-                Edge(2941487254L, 1192483885L, "606461287820722176"),
-                Edge(2941487254L, 132988448L, "606461112033275905"),
-                Edge(132988448L, 838147628L, "606461464958795777"),
-                Edge(838147628L, 132988448L, "606460199306698753"),
-                Edge(838147628L, 473822999L, "606461472349257728"),
-                Edge(465776805L, 2941487254L, "606461463524352002"),
-                Edge(465776805L, 601389784L, "606460012626591744"),
-                Edge(465776805L, 2249679902L, "606460015893987328"),
-                Edge(2249679902L, 465776805L, "606461276378636289"),
-                Edge(2932436311L, 465776805L, "606460093828329472"),
-                Edge(1192483885L, 2941487254L, "606461532248121344"),
-                Edge(465776805L, 2941487254L, "606460150308859904"),
-                Edge(601389784L, 2732329846L, "606461431526133760"),
-                Edge(2932436311L, 465776805L, "606460103198273536"),
-                Edge(2941487254L, 465776805L, "606460245792071682"),
-                Edge(2941487254L, 1192483885L, "606461533720334336"),
-                Edge(2941487254L, 1192483885L, "606461215712378880"),
-                Edge(1192483885L, 2941487254L, "606461128160378881"),
-                Edge(1192483885L, 2941487254L, "606460290683670528"),
-                Edge(2732329846L, 132988448L, "606461106333347840"),
-                Edge(2941487254L, 132988448L, "606460373747814400"),
-                Edge(132988448L, 2941487254L, "606460278247727105"),
-                Edge(132988448L, 2941487254L, "606461340119498753"),
-                Edge(132988448L, 2941487254L, "606460270664425472"),
-                Edge(601389784L, 2732329846L, "606461376081436672"),
-                Edge(601389784L, 2732329846L, "606461120489095168"),
-                Edge(2732329846L, 2941487254L, "606460080603709440"),
-                Edge(2732329846L, 2941487254L, "606461382322614272"),
-                Edge(2564641105L,1518391292L,"606460348888064001"),
-                Edge(1518391292L,2564641105L,"606461173672722432")
+                Edge(2732329846L, 132988448L, "608919340121870338"),
+                Edge(2732329846L, 2941487254L, "608919742347264000"),
+                Edge(2732329846L, 601389784L, "608918664549687299"),
+                Edge(601389784L, 2732329846L, "608918165117104129"),
+                Edge(2941487254L, 1192483885L, "608921008020566016"),
+                Edge(2941487254L, 132988448L, "608920341084258304"),
+                Edge(132988448L, 838147628L, "608919327694270464"),
+                Edge(838147628L, 132988448L, "608919807887552513"),
+                Edge(838147628L, 473822999L, "608919870277869568"),
+                Edge(465776805L, 2941487254L, "608920678117597184"),
+                Edge(465776805L, 601389784L, "608917990365499392"),
+                Edge(465776805L, 2249679902L, "608918336643039232"),
+                Edge(2249679902L, 465776805L, "608919570796163072"),
+                Edge(2932436311L, 465776805L, "608921304377475073"),
+                Edge(1192483885L, 2941487254L, "608921260387610624"),
+                Edge(465776805L, 2941487254L, "608918707797110784"),
+                Edge(601389784L, 2732329846L, "608919779542339584"),
+                Edge(2932436311L, 465776805L, "608917272883789824"),
+                Edge(2941487254L, 465776805L, "608920374680506368"),
+                Edge(2941487254L, 1192483885L, "608920849664450560"),
+                Edge(2941487254L, 1192483885L, "608917634822733824"),
+                Edge(1192483885L, 2941487254L, "608920742990868480"),
+                Edge(1192483885L, 2941487254L, "608921092334354432"),
+                Edge(2732329846L, 132988448L, "608917366538424320"),
+                Edge(2941487254L, 132988448L, "608920981650976769"),
+                Edge(132988448L, 2941487254L, "608920887639855104"),
+                Edge(132988448L, 2941487254L, "608916751988867072"),
+                Edge(132988448L, 2941487254L, "608919716137033730"),
+                Edge(601389784L, 2732329846L, "608921306705354752"),
+                Edge(601389784L, 2732329846L, "608918359913164801"),
+                Edge(2732329846L, 2941487254L, "608920468985266176"),
+                Edge(2732329846L, 2941487254L, "608918157806432257"),
+                Edge(2564641105L,1518391292L,"608918942086799360"),
+                Edge(1518391292L,2564641105L,"608921314104094720")
             ))
 
         // Define a default user in case there are relationship with missing user
