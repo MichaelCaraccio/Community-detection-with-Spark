@@ -23,6 +23,8 @@ import collection.JavaConversions._
 import org.apache.log4j.Logger
 import org.apache.log4j.Level
 
+import scala.math._
+
 // Enable Cassandra-specific functions on the StreamingContext, DStream and RDD:
 import com.datastax.spark.connector._ 
 import com.datastax.spark.connector.streaming._
@@ -37,6 +39,32 @@ import org.apache.spark.rdd.RDD
 // https://github.com/datastax/spark-cassandra-connector/blob/master/doc/5_saving.md
 
 object SaveCommunicationToCassandra{
+
+    private val defaultSeed = 0xadc83b19L
+
+    /**
+     * @constructor murmurHash64A
+     *
+     *
+     * @param
+     * @param
+     * @return Long
+     *
+     */
+    def murmurHash64A(data: Seq[Byte], seed: Long = defaultSeed): Long = {
+        val m = 0xc6a4a7935bd1e995L
+        val r = 47
+
+        val f: Long => Long = m.*
+        val g: Long => Long = x => x ^ (x >>> r)
+
+        val h = data.grouped(8).foldLeft(seed ^ f(data.length)) { case (y, xs) =>
+            val k = xs.foldRight(0L)((b, x) => (x << 8) + (b & 0xff))
+            val j: Long => Long = if (xs.length == 8) f compose g compose f else identity
+            f(y ^ j(k))
+        }
+        (g compose f compose g)(h)
+    }
     
     def main(args: Array[String]) {
         
@@ -75,62 +103,53 @@ object SaveCommunicationToCassandra{
         val stream = TwitterUtils.createStream(ssc, Option(twitterstream.getAuthorization()), words)
 
         // Stream about users
-        val usersStream = stream.map{status => (status.getUser.getId.toString, 
-                                                status.getUser.getName.toString,
-                                                status.getUser.getLang,
-                                                status.getUser.getFollowersCount.toString,
-                                                status.getUser.getFriendsCount.toString,
-                                                status.getUser.getScreenName,
-                                                status.getUser.getStatusesCount.toString)}
+        val usersStream = stream.map{status => (
+            status.getUser.getId.toString,
+            abs(murmurHash64A(status.getUser.getScreenName.getBytes)),
+            status.getUser.getName.toString,
+            status.getUser.getLang,
+            status.getUser.getFollowersCount.toString,
+            status.getUser.getFriendsCount.toString,
+            status.getUser.getScreenName,
+            status.getUser.getStatusesCount.toString)}
         
         
         // Stream about communication between two users
-        val commStream = stream.map{status => (status.getId.toString, 
-                                                status.getUser.getId.toString, 
-                                                status.getUser.getName.toString,
-                                                if(pattern.findFirstIn(status.getText).isEmpty)
-                                                {
-                                                        ""
-                                                }
-                                                else
-                                                {
-                                                    pattern.findFirstIn(status.getText).getOrElse("@MichaelCaraccio").tail
-                                                },
-                                               status.getText,
-                                               status.getUser.getLang
-                                            )}
+        val commStream = stream.map{status => (
+            status.getId.toString, //tweet_id
+            status.getUser.getId.toString, // user_send_twitter_ID
+            abs(murmurHash64A(status.getUser.getScreenName.getBytes)), // user_send_local_ID
+            if(pattern.findFirstIn(status.getText).isEmpty)
+            {
+                    ""
+            }
+            else
+            {
+                pattern.findFirstIn(status.getText).getOrElse("@MichaelCaraccio").tail
+            },
+           status.getText,
+           status.getUser.getLang
+        )}
         
         
 
         // Stream about tweets
-        val tweetsStream = stream.map{status => (status.getId.toString, 
-                                                 status.getUser.getId.toString, 
-                                                 status.getText,
-                                                 status.getRetweetCount.toString,
-                                                 new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss").format(status.getCreatedAt),
-
-                                                 Option(status.getGeoLocation) match {
-                                                     case Some(theValue) => 
-                                                     status.getGeoLocation.getLongitude.toString
-                                                     case None           => 
-                                                     ""
-                                                 }, 
-
-                                                 Option(status.getGeoLocation) match {
-                                                     case Some(theValue) => 
-                                                     status.getGeoLocation.getLatitude.toString
-                                                     case None           => 
-                                                     ""
-                                                 }
-                                                )}
+        val tweetsStream = stream.map{status => (
+            status.getId.toString,
+            status.getUser.getId.toString,
+            abs(murmurHash64A(status.getUser.getScreenName.getBytes)),
+            new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss").format(status.getCreatedAt),
+            status.getRetweetCount.toString,
+            status.getText
+        )}
         
         
         // ************************************************************
         // Save user's informations in Cassandra
         // ************************************************************
         usersStream.foreachRDD(rdd => {
-            rdd.saveToCassandra("twitter", "user_filtered", SomeColumns("user_id", "user_name", "user_lang", "user_follower_count", "user_friends_count", "user_screen_name", "user_status_count"))
-            
+            rdd.saveToCassandra("twitter", "user_filtered", SomeColumns("user_twitter_id", "user_local_id", "user_name", "user_lang", "user_follow_count", "user_friends_count", "user_screen_name", "user_status_count"))
+
             println("Users saved : " + rdd.count())
         })
         
@@ -155,18 +174,19 @@ object SaveCommunicationToCassandra{
                     
                     // For each receiver in tweet
                     matches.foreach{destName => {
-        
+                        var user_dest_name = destName.drop(1)
+
                         // TODO : Optimize save to cassandra with concatenate seq and save it when the loop is over
-                        val collection = currentContext.parallelize(Seq((item._1, item._2,item._3,destName)))
+                        val collection = currentContext.parallelize(Seq((item._1, item._2,item._3, abs(murmurHash64A(user_dest_name.getBytes)))))
                         
                         collection.saveToCassandra(
                             "twitter", 
                             "users_communicate",
                             SomeColumns(
                                 "tweet_id",
-                                "user_send_id",
-                                "user_send_name",
-                                "user_dest_name"))
+                                "user_send_twitter_id",
+                                "user_send_local_id",
+                                "user_dest_id"))
                     }}
                 }
             }
@@ -198,21 +218,21 @@ object SaveCommunicationToCassandra{
             for(item <- tabValues.toArray) { 
                 
                 // New tweet value
-                var newTweet = patternURL.replaceAllIn(item._3, "")
+                var newTweet = patternURL.replaceAllIn(item._6, "")
                 newTweet = patternSmiley.replaceAllIn(newTweet, "")
                 
-                val collection = currentContext.parallelize(Seq((item._1, item._2, newTweet, item._4, item._5, item._6, item._7)))
+                val collection = currentContext.parallelize(Seq((item._1, item._2, item._3, item._4, item._5, newTweet)))
                 
                 collection.saveToCassandra(
                     "twitter", 
                     "tweet_filtered",
                     SomeColumns("tweet_id", 
-                                "user_id", 
-                                "tweet_text", 
-                                "tweet_retweet", 
-                                "tweet_create_at", 
-                                "user_longitude", 
-                                "user_latitude"))
+                                "user_twitter_id",
+                                "user_local_id",
+                                "tweet_create_at",
+                                "tweet_retweet",
+                                "tweet_text"
+                                ))
             }
             
             println("Tweets saved : " + rdd.count())
