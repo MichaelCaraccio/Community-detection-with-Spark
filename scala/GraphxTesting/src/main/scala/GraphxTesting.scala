@@ -6,6 +6,7 @@ import RDDUtils.RDDUtils
 
 import scala.collection.mutable.ArrayBuffer
 import scala.math._
+
 import org.apache.spark.mllib.linalg.{Vector, DenseMatrix, Matrix, Vectors}
 
 import org.apache.spark.SparkContext
@@ -18,6 +19,10 @@ import org.apache.log4j.Level
 import org.apache.spark.graphx._
 import org.apache.spark.graphx.lib._
 import org.apache.spark.graphx.PartitionStrategy._
+import org.apache.spark.mllib.clustering.LDA
+import org.apache.spark.mllib.linalg.Vectors
+import org.apache.spark.mllib.clustering._
+
 
 // To make some of the examples work we will also need RDD
 import org.apache.spark.rdd.RDD
@@ -43,7 +48,7 @@ object GraphxTesting {
         println("**************************************************************\n")
 
         val cu = new CassandraUtils
-        val mu = new MllibUtils
+
         val comUtils = new CommunityUtils
         val gu = new GraphUtils
         val ru = new RDDUtils
@@ -249,21 +254,58 @@ object GraphxTesting {
             val numStopwords  = 0
 
             // Initialize LDA
-            time { mu initLDA(corpus, numTopics, numIterations, numStopwords) }
+            println(color("\nCall InitLDA", RED))
+
+            val topicSmoothing = 1.2
+            val termSmoothing = 1.2
+
+            // Set LDA parameters
+            val lda = new LDA()
+                .setK(numTopics)
+                .setDocConcentration(topicSmoothing)
+                .setTopicConcentration(termSmoothing)
+                .setMaxIterations(numIterations)
+            //.setOptimizer("online")
+
+            val mu = new MllibUtils(lda)
+
+
 
             // Create documents
             var result = ArrayBuffer[String]()
-            result += "Concentration parameter (commonly named) for the prior placed on documents' distributions over topics"
+            result += "Concentration parameter commonly named for the prior placed on documents distributions over topics"
+            result += "Concentration distributions topics"
+
+            /*
             result += "Topic models automatically infer the topics discussed in a collection of documents. These topics can be used"
             result += "Perhaps some merchant hath invited him, And from the mart he's somewhere gone to dinner."
             result += "Good sister, let us dine and never fret: Time is their master, and, when they see time,"
             result += "Why, headstrong liberty is lash'd with woe. There's nothing situate under heaven's eye"
+            result += "Shakespeare was born and brought up in Stratford-upon-Avon. At the age of 18, he married Anne Hathaway, with whom he had three children: Susanna, and twins Hamnet and Judith. Between 1585 and 1592, he began a successful career in London as an actor, writer, and part-owner of a playing company called the Lord Chamberlain's Men, later known as the King's Men. He appears to have retired to Stratford around 1613 at age 49, where he died three years later. Few records of Shakespeare's private life survive, and there has been considerable speculation about such matters as his physical appearance, sexuality, religious beliefs, and whether the works attributed to him were written by others."
+            result += "Alas, that love, whose view is muffled still, Should, without eyes, see pathways to his will! Where shall we dine? O me! What fray was here? Yet tell me not, for I have heard it all. Here's much to do with hate, but more with love. Why, then, O brawling love! O loving hate! O any thing, of nothing first create! O heavy lightness! serious vanity! Mis-shapen chaos of well-seeming forms! Feather of lead, bright smoke, cold fire, sick health! Still-waking sleep, that is not what it is! This love feel I, that feel no love in this. Dost thou not laugh?"
+            */
 
             val doc:RDD[String] = sc.parallelize(result)
-            val (newdoc:RDD[(Long, Vector)], newvocabArray) = time { mu createDocuments(doc, 20) }
+
+            val (newdoc:RDD[(Long, Vector)], newvocabArray) = time { mu createDocuments(doc, 0) }
+
+            var ldaModel:DistributedLDAModel = lda.run(newdoc).asInstanceOf[DistributedLDAModel]
 
             // Find
-            time { mu findTopics(newdoc, newvocabArray, numWordsByTopics, true) }
+            ldaModel = time { mu findTopics(ldaModel, newdoc, newvocabArray, numWordsByTopics, true) }
+
+
+            // SECOND
+
+            /*
+            val (newdoc2, newvocabArray2) = time { mu createDocuments(corpus, newvocabArray, 20) }
+
+            ldaModel = lda.run(newdoc2).asInstanceOf[DistributedLDAModel]
+
+            // Find
+            ldaModel = time { mu findTopics(ldaModel, newdoc2, newvocabArray2, numWordsByTopics, true) }
+
+            */
 
 
             iComm +=1
