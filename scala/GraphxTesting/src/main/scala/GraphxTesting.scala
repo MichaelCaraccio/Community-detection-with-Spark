@@ -265,20 +265,15 @@ object GraphxTesting {
                 .setDocConcentration(topicSmoothing)
                 .setTopicConcentration(termSmoothing)
                 .setMaxIterations(numIterations)
-            //.setOptimizer("online")
-
-            val mu = new MllibUtils(lda)
-
-
+                //.setOptimizer("online")
 
             // Create documents
             var allTexts = ArrayBuffer[String]()
             allTexts += "Concentration parameter commonly named for the prior placed"
             allTexts += "Concentration distributions topics Concentration"
 
-            var newTweet = ArrayBuffer[String]()
+            val mu = new MllibUtils(lda, sc, allTexts,allTexts)
 
-            newTweet += "Concentration distributions topics Concentration"
 
             /*
             result += "Topic models automatically infer the topics discussed in a collection of documents. These topics can be used"
@@ -289,18 +284,30 @@ object GraphxTesting {
             result += "Alas, that love, whose view is muffled still, Should, without eyes, see pathways to his will! Where shall we dine? O me! What fray was here? Yet tell me not, for I have heard it all. Here's much to do with hate, but more with love. Why, then, O brawling love! O loving hate! O any thing, of nothing first create! O heavy lightness! serious vanity! Mis-shapen chaos of well-seeming forms! Feather of lead, bright smoke, cold fire, sick health! Still-waking sleep, that is not what it is! This love feel I, that feel no love in this. Dost thou not laugh?"
             */
 
-            val allTextsRDD:RDD[String] = sc.parallelize(allTexts)
-            val newTweetRDD:RDD[String] = sc.parallelize(newTweet)
+            mu newTweet("Concentration distributions topics Concentration")
 
-            val (newdoc:RDD[(Long, Vector)], newvocabArray) = time { mu createDocuments(sc, allTextsRDD, newTweetRDD, 0) }
-
-            //val (newdoc:RDD[(Long, Vector)], newvocabArray) = time { mu createDocuments(doc, 0) }
+            val (newdoc:RDD[(Long, Vector)], newvocabArray) = time { mu createDocuments(sc, 0) }
 
             var ldaModel:DistributedLDAModel = lda.run(newdoc).asInstanceOf[DistributedLDAModel]
 
             // Find
-            ldaModel = time { mu findTopics(ldaModel, newdoc, newvocabArray, numWordsByTopics, true) }
+            ldaModel = time { mu findTopics(ldaModel, newvocabArray, numWordsByTopics, true) }
 
+
+
+
+
+
+            mu newTweet("October arrived, spreading a damp chill")
+
+            mu addToDictionnary("October arrived, spreading a damp chill ")
+
+            val (newdoc2:RDD[(Long, Vector)], newvocabArray2) = time { mu createDocuments(sc, 0) }
+
+            var ldaModel2:DistributedLDAModel = lda.run(newdoc2).asInstanceOf[DistributedLDAModel]
+
+            // Find
+            ldaModel2 = time { mu findTopics(ldaModel2, newvocabArray2, numWordsByTopics, true) }
 
             // SECOND
 
