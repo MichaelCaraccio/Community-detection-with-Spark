@@ -1,16 +1,21 @@
 package MllibUtils
 
 import scala.collection.mutable
+import scala.collection.mutable.HashMap
 import org.apache.spark.mllib.clustering._
 import org.apache.spark.mllib.linalg.{Vector, DenseMatrix, Matrix, Vectors}
 import scala.collection.mutable.ArrayBuffer
 import Array._
+//import scalaz._, Scalaz._
 
 import org.apache.spark.rdd.RDD
 import org.apache.spark.SparkContext
 import org.apache.spark.SparkContext._
 import org.apache.spark.mllib.clustering.LDA
 import org.apache.spark.mllib.linalg.Vectors
+
+import org.apache.spark.mllib.feature.HashingTF
+import org.apache.spark.mllib.linalg.Vector
 
 class MllibUtils(_lda:LDA) {
 
@@ -100,27 +105,116 @@ class MllibUtils(_lda:LDA) {
 
         //println("-------------------------------------------------------")
 
+//(RDD[(Long, Vector)], Array[String])
+    def createDocuments(sc:SparkContext, corpus:RDD[String], tweet:RDD[String], numStopwords:Int): (RDD[(Long, Vector)], Array[String]) = {
+
+    println(color("\nCall createDocuments", RED))
+
+    // Split text into terms (words) and then remove :
+    // -> (a) non-alphabetic terms
+    // -> (b) short terms with < 4 characters
+    // -> (c) the most common 20 terms (as “stopwords”)
+    val tokenizedCorpus: RDD[Seq[String]] =
+        corpus.map(_.toLowerCase.split("\\s")).map(_.filter(_.length > 3).filter(_.forall(java.lang.Character.isLetter)))
+    //tokenizedCorpus.foreach(println(_))
 
 
+    /*     var mapsss = List[String]()
+        for (tokens <- tokenizedCorpus){
+            mapsss = mapsss ++ tokens
 
-    def createDocuments(corpus:RDD[String], numStopwords:Int): (RDD[(Long, Vector)], Array[String]) = {
+        }
+    println(".....")
+    println(mapsss)
+    println(".....")*/
 
-        println(color("\nCall createDocuments", RED))
-
-        // Split text into terms (words) and then remove :
-        // -> (a) non-alphabetic terms
-        // -> (b) short terms with < 4 characters
-        // -> (c) the most common 20 terms (as “stopwords”)
-        val tokenized: RDD[Seq[String]] =
-            corpus.map(_.toLowerCase.split("\\s")).map(_.filter(_.length > 3).filter(_.forall(java.lang.Character.isLetter)))
-
+    //mapsss.foreach(println(_))
 
 
-        // Choose the vocabulary
-        //   termCounts: Sorted list of (term, termCount) pairs
-        val termCounts: Array[(String, Long)] = tokenized.flatMap(_.map(_ -> 1L)).reduceByKey(_ + _).collect().sortBy(-_._2)
+    val tokenizedTweet: RDD[Seq[String]] =
+        tweet.map(_.toLowerCase.split("\\s")).map(_.filter(_.length > 3).filter(_.forall(java.lang.Character.isLetter)))
+    //tokenizedTweet.foreach(println(_))
+
+
+    // Choose the vocabulary
+    //   termCounts: Sorted list of (term, termCount) pairs
+    val termCounts: Array[(String, Long)] = tokenizedCorpus.flatMap(_.map(_ -> 1L)).reduceByKey(_ + _).collect().sortBy(-_._2)
+    val vocabArray: Array[String] = termCounts.takeRight(termCounts.size - numStopwords).map(_._1)
+
+    //vocabArray.foreach(println(_))
+
+    /*println(tokenizedTweet.collect.flatten.length)
+    for(word <- vocabArray){
+        println("word: " + word + tokenizedTweet.collect)
+        if(tokenizedTweet.collect.flatten contains word){
+            println("trouvé: " + word + "swag: " + tokenizedTweet.collect.flatten.count(_ == word))
+        }
+    }*/
+    /*vocabArray.map(terms => {
+        println("word: " + terms + terms)
+        terms.foldLeft(new HashMap[String, Int]()){
+            (map, term) => {
+                map += term -> (map.getOrElse(term, 0) + 1)
+                map
+            }
+                if (tokenizedTweet.collect.flatten contains terms) {
+                println("trouvé: " + terms + "swag: " + tokenizedTweet.collect.flatten.count(_ == terms))
+            }
+        }
+    })*/
+
+    val vocab: Map[String, Int] = vocabArray.zipWithIndex.toMap
+    //val fuck:RDD[(Long, Vector)] = sc.parallelize(vocab)
+    vocabArray.foreach(println(_))
+
+    val documents: Map[Long, Vector] =
+        vocab.map { case (tokens, id) =>
+            val counts = new mutable.HashMap[Int, Double]()
+            //tokens.foreach { term =>
+            //if (tokenizedTweet.collect.flatten.contains(tokens)) {
+            val idx = vocab(tokens)
+            counts(idx) = counts.getOrElse(idx, 0.0) + tokenizedTweet.collect.flatten.count(_ == tokens)
+            //}
+            //println("TERM: "+ tokens + "\t\tid:" + id + "\t\tvocab.size: " + vocab.size +"\t\ttokens: " + tokens)
+
+            //}
+            //println("id: "+ id + "\t\tvocab.size:" + vocab.size + "\t\tcounts.toSeq: " + counts.toSeq)
+
+            (id.toLong, Vectors.sparse(vocab.size, counts.toSeq))
+        }
+    documents.foreach(println(_))
+
+    val con = sc.parallelize(documents.toSeq)
+
+    con.collect.foreach(println(_))
+
+    /*
+
+
+   /* val termFreqsTweet = vocabArray.map(terms => {
+
+        terms.foldLeft(new HashMap[String, Int]()){
+            (map, term) => {
+                map += term -> (map.getOrElse(term, 0) + 1)
+                map
+            }
+        }
+    })
+    termFreqsTweet.foreach(println(_))*/
+
+    val termFreqs = tokenizedCorpus.map(terms => {
+
+            terms.foldLeft(new HashMap[String, Int]()){
+                (map, term) => {
+                    map += term -> (map.getOrElse(term, 0) + 1)
+                    map
+                }
+            }
+        })
+        termFreqs.foreach(println(_))
+
         //println("Words: " + termCounts.map { case (word, count) => count }.reduce(_ + _) + "\n")
-
+        //termCounts.foreach(println(_))
 
         //println("\nvocabArray\n")
         //termCounts.foreach(x => println("Word: "+x._1.toString + "   Count: " +x._2.toString))
@@ -128,14 +222,12 @@ class MllibUtils(_lda:LDA) {
         //   vocabArray: Chosen vocab (removing common terms)
         println("Avant:"+ termCounts.takeRight(termCounts.size - numStopwords).map(_._1).length)
 
-        val vocabArray: Array[String] = termCounts.takeRight(termCounts.size - numStopwords).map(_._1)
-
-        println("Après:" + vocabArray.length)
+        println("Après:")
         vocabArray.foreach(println(_))
         //   vocab: Map term -> term index
-        val vocab: Map[String, Int] = vocabArray.zipWithIndex.toMap
+        //val vocab: Map[String, Int] = vocabArray.zipWithIndex.toMap
 
-        vocab.foreach(x => println("Word: "+x._1.toString + "   Count: " +x._2.toString))
+        //vocab.foreach(x => println("Word: "+x._1.toString + "   Count: " +x._2.toString))
 
         /*println("\ntokenized\n")
         tokenized.foreach(println(_))
@@ -145,7 +237,7 @@ class MllibUtils(_lda:LDA) {
         vocab.foreach(println(_))*/
 
         // Convert documents into term count vectors
-        val documents: RDD[(Long, Vector)] =
+        /*val documents: RDD[(Long, Vector)] =
             tokenized.zipWithIndex.map { case (tokens, id) =>
                 val counts = new mutable.HashMap[Int, Double]()
                 tokens.foreach { term =>
@@ -159,7 +251,15 @@ class MllibUtils(_lda:LDA) {
                 println("id: "+ id + "\t\tvocab.size:" + vocab.size + "\t\tcounts.toSeq: " + counts.toSeq)
 
                 (id, Vectors.sparse(vocab.size, counts.toSeq))
-            }
-        (documents,vocabArray)
+            }*/
+        //(documents,vocabArray)
+
+
+        val hashingTF = new HashingTF()
+        val tf: RDD[Vector] = hashingTF.transform(tokenizedCorpus)
+
+        //tf.foreach(println(_))*/
+
+        (con, vocabArray)
     }
 }

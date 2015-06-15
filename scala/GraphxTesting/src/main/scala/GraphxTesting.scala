@@ -272,9 +272,13 @@ object GraphxTesting {
 
 
             // Create documents
-            var result = ArrayBuffer[String]()
-            result += "Concentration parameter commonly named for the prior placed on documents distributions over topics"
-            result += "Concentration distributions topics"
+            var allTexts = ArrayBuffer[String]()
+            allTexts += "Concentration parameter commonly named for the prior placed"
+            allTexts += "Concentration distributions topics Concentration"
+
+            var newTweet = ArrayBuffer[String]()
+
+            newTweet += "Concentration distributions topics Concentration"
 
             /*
             result += "Topic models automatically infer the topics discussed in a collection of documents. These topics can be used"
@@ -285,9 +289,12 @@ object GraphxTesting {
             result += "Alas, that love, whose view is muffled still, Should, without eyes, see pathways to his will! Where shall we dine? O me! What fray was here? Yet tell me not, for I have heard it all. Here's much to do with hate, but more with love. Why, then, O brawling love! O loving hate! O any thing, of nothing first create! O heavy lightness! serious vanity! Mis-shapen chaos of well-seeming forms! Feather of lead, bright smoke, cold fire, sick health! Still-waking sleep, that is not what it is! This love feel I, that feel no love in this. Dost thou not laugh?"
             */
 
-            val doc:RDD[String] = sc.parallelize(result)
+            val allTextsRDD:RDD[String] = sc.parallelize(allTexts)
+            val newTweetRDD:RDD[String] = sc.parallelize(newTweet)
 
-            val (newdoc:RDD[(Long, Vector)], newvocabArray) = time { mu createDocuments(doc, 0) }
+            val (newdoc:RDD[(Long, Vector)], newvocabArray) = time { mu createDocuments(sc, allTextsRDD, newTweetRDD, 0) }
+
+            //val (newdoc:RDD[(Long, Vector)], newvocabArray) = time { mu createDocuments(doc, 0) }
 
             var ldaModel:DistributedLDAModel = lda.run(newdoc).asInstanceOf[DistributedLDAModel]
 
