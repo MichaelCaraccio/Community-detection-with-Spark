@@ -1,26 +1,17 @@
-import org.apache.spark.streaming.{Seconds, StreamingContext}
-import StreamingContext._
-
 import org.apache.spark.SparkContext
 import org.apache.spark.SparkContext._
 
-import org.apache.spark.streaming.twitter
-import org.apache.spark.streaming.twitter._
+import org.apache.spark._
+import org.apache.spark.streaming._
 
+
+import org.apache.spark.SparkContext._
+import org.apache.spark.streaming.twitter._
+import org.apache.spark.streaming.twitter
+import org.apache.spark.streaming.twitter.TwitterUtils
+import org.apache.spark.streaming.twitter.TwitterUtils._
 import org.apache.spark.SparkConf
 
-import org.apache.spark.streaming._ 
-import org.apache.spark.streaming.dstream.DStream
-import org.apache.spark.streaming.Seconds
-import org.apache.spark.streaming.StreamingContext
-import org.apache.spark.streaming.StreamingContext._
-
-/*import twitter4j.Status
-import twitter4j.auth.Authorization*/
-
-/*import twitter4j.TwitterFactory
-import twitter4j.auth.AccessToken
-import twitter4j._*/
 import collection.JavaConversions._
 
 import org.apache.log4j.Logger
@@ -80,7 +71,7 @@ object SaveCommunicationToCassandra{
         Logger.getLogger("akka").setLevel(Level.OFF)
         
         // Spark configuration
-        val sparkConf = new SparkConf(true)
+        val sparkConf = new SparkConf()
         .setMaster("local[2]")
         .setAppName("SaveCommunicationToCassandra")
         .set("spark.cassandra.connection.host", "127.0.0.1") // Link to Cassandra
@@ -110,7 +101,8 @@ object SaveCommunicationToCassandra{
         System.setProperty("twitter4j.oauth.accessTokenSecret", "UIMZ1aD06DObpKI741zC8wHZF8jkj1bh02Lqfl5cQ76Pl")
 
         val ssc = new StreamingContext(sparkConf, Seconds(2))
-        val stream = TwitterUtils.createStream(ssc, None, words)
+        val stream = TwitterUtils.createStream(ssc, None)
+
 
         // Stream about users
         val usersStream = stream.map{status => (
