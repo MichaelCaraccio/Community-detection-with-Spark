@@ -78,6 +78,9 @@ class MllibUtils(_lda:LDA, _sc:SparkContext, _dictionnary:ArrayBuffer[String],_c
         currentTweet += newTweet
         currentTweetRDD = sc.parallelize(currentTweet)
 
+        // Add tweet to dictionnary
+        addToDictionnary(newTweet)
+
         currentTweetRDD.collect.foreach(println(_))
     }
 

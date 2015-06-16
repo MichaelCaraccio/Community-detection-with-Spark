@@ -48,7 +48,6 @@ object GraphxTesting {
         println("**************************************************************\n")
 
         val cu = new CassandraUtils
-
         val comUtils = new CommunityUtils
         val gu = new GraphUtils
         val ru = new RDDUtils
@@ -77,7 +76,7 @@ object GraphxTesting {
         val graph = Graph(users, relationships, defaultUser).cache()
 
 
-        /*
+
         println("\n**************************************************************")
         println("                       TEST METHODS                           ")
         println("**************************************************************")
@@ -87,14 +86,14 @@ object GraphxTesting {
         println("--------------------------------------------------------------\n")
 
         // See who communicates with who
-        time { displayAllCommunications(graph) }
+        time { ru displayAllCommunications(graph) }
 
         // Let's find user id
-        val id = time { findUserIDByNameInGraph(graph, "Michael") }
+        val id = time { ru findUserIDByNameInGraph(graph, "Michael") }
         println("ID for user Michael is : " + id.toString)
 
         // Find username with user ID
-        val name = time { findUserNameByIDInGraph(graph, 1) }
+        val name = time { ru findUserNameByIDInGraph(graph, 1) }
         println("Name for id 1 is : " + name.toString)
 
         // get tweet content with tweet ID
@@ -110,7 +109,7 @@ object GraphxTesting {
         resultGetTweetsIDFromUser.foreach(println(_))
 
         // Count in and out degrees
-        time { inAndOutDegrees(graph) }
+        time { gu inAndOutDegrees(graph) }
 
 
         println("\n--------------------------------------------------------------")
@@ -127,10 +126,10 @@ object GraphxTesting {
         time { comUtils getTriangleCount(graph, users) }
 
         // Get PageRank
-        time { getPageRank(graph, users) }
+        time { gu getPageRank(graph, users) }
 
         // K-Core decomposition
-        time { comUtils getKCoreGraph(graph, users, 4) }
+        time { comUtils getKCoreGraph(graph, users, 4, true) }
 
         // LabelPropagation
         val graphLabelPropagation = time { LabelPropagation.run(graph, 4).cache() }
@@ -152,25 +151,6 @@ object GraphxTesting {
         graphLabelPropagation.edges.collect.foreach(println(_))
 
 
-        println("\n--------------------------------------------------------------")
-        println("Mllib")
-        println("--------------------------------------------------------------\n")
-
-        // LDA
-        // 1. Get every tweets from the graph and store it in corpus
-        // 2. Call LDA method
-        val corpus = time { cu getTweetsContentFromEdge(sc, graph.edges, true) }
-        corpus.foreach(println(_))
-
-        val numTopics = 10
-        val numIterations = 10
-        val numWordsByTopics = 10
-        val numStopwords  = 20
-        time { mu getLDA(sc, corpus, numTopics, numIterations, numWordsByTopics, numStopwords, true) }
-
-
-
-
         println("\n**************************************************************")
         println("                       FIRST EXAMPLE                          ")
         println("**************************************************************")
@@ -181,7 +161,7 @@ object GraphxTesting {
         println("--------------------------------------------------------------")
 
         // K-Core decomposition
-        val graph_2 = time { comUtils getKCoreGraph(graph, users, 5) }.cache()
+        val graph_2 = time { comUtils getKCoreGraph(graph, users, 5, false) }.cache()
 
         graph_2.edges.collect.foreach(println(_))
         graph_2.vertices.collect.foreach(println(_))
@@ -198,9 +178,9 @@ object GraphxTesting {
         println("--------------------------------------------------------------")
 
         val corpusWords = time { cu getTweetsContentFromEdge(sc, graph_2.edges, true) }
-        corpus.foreach(println(_))
+        corpusWords.foreach(println(_))
 
-        println("\n--------------------------------------------------------------")
+        /*println("\n--------------------------------------------------------------")
         println("Fourth Step - LDA Algorithm")
         println("--------------------------------------------------------------")
 
@@ -208,10 +188,10 @@ object GraphxTesting {
         val nIterations = 10
         val nWordsByTopics = 10
         val nStopwords  = 20
-        time { mu getLDA(sc, corpusWords, nTopics, nIterations, nWordsByTopics, nStopwords, true) }
+        time { mu getLDA(sc, corpusWords, nTopics, nIterations, nWordsByTopics, nStopwords, true) }*/
 
 
-        */
+
 
         println("\n**************************************************************")
         println("                       SECOND EXAMPLE                         ")
@@ -268,39 +248,25 @@ object GraphxTesting {
                 //.setOptimizer("online")
 
             // Create documents
-            var allTexts = ArrayBuffer[String]()
-            allTexts += "Concentration parameter commonly named for the prior placed"
-            allTexts += "Concentration distributions topics Concentration"
+            var firstDoc = ArrayBuffer[String]()
+            firstDoc += "Concentration parameter commonly named for the prior placed"
 
-            val mu = new MllibUtils(lda, sc, allTexts,allTexts)
+            // Init LDA
+            val mu = new MllibUtils(lda, sc, firstDoc, firstDoc)
 
-
-            /*
-            result += "Topic models automatically infer the topics discussed in a collection of documents. These topics can be used"
-            result += "Perhaps some merchant hath invited him, And from the mart he's somewhere gone to dinner."
-            result += "Good sister, let us dine and never fret: Time is their master, and, when they see time,"
-            result += "Why, headstrong liberty is lash'd with woe. There's nothing situate under heaven's eye"
-            result += "Shakespeare was born and brought up in Stratford-upon-Avon. At the age of 18, he married Anne Hathaway, with whom he had three children: Susanna, and twins Hamnet and Judith. Between 1585 and 1592, he began a successful career in London as an actor, writer, and part-owner of a playing company called the Lord Chamberlain's Men, later known as the King's Men. He appears to have retired to Stratford around 1613 at age 49, where he died three years later. Few records of Shakespeare's private life survive, and there has been considerable speculation about such matters as his physical appearance, sexuality, religious beliefs, and whether the works attributed to him were written by others."
-            result += "Alas, that love, whose view is muffled still, Should, without eyes, see pathways to his will! Where shall we dine? O me! What fray was here? Yet tell me not, for I have heard it all. Here's much to do with hate, but more with love. Why, then, O brawling love! O loving hate! O any thing, of nothing first create! O heavy lightness! serious vanity! Mis-shapen chaos of well-seeming forms! Feather of lead, bright smoke, cold fire, sick health! Still-waking sleep, that is not what it is! This love feel I, that feel no love in this. Dost thou not laugh?"
-            */
-
+            // First tweet
             mu newTweet("Concentration distributions topics Concentration")
 
+            // Get documents and word's array
             val (newdoc:RDD[(Long, Vector)], newvocabArray) = time { mu createDocuments(sc, 0) }
 
             var ldaModel:DistributedLDAModel = lda.run(newdoc).asInstanceOf[DistributedLDAModel]
 
-            // Find
+            // Find topics
             ldaModel = time { mu findTopics(ldaModel, newvocabArray, numWordsByTopics, true) }
 
-
-
-
-
-
+            // Second tweet
             mu newTweet("October arrived, spreading a damp chill")
-
-            mu addToDictionnary("October arrived, spreading a damp chill ")
 
             val (newdoc2:RDD[(Long, Vector)], newvocabArray2) = time { mu createDocuments(sc, 0) }
 
@@ -309,23 +275,9 @@ object GraphxTesting {
             // Find
             ldaModel2 = time { mu findTopics(ldaModel2, newvocabArray2, numWordsByTopics, true) }
 
-            // SECOND
-
-            /*
-            val (newdoc2, newvocabArray2) = time { mu createDocuments(corpus, newvocabArray, 20) }
-
-            ldaModel = lda.run(newdoc2).asInstanceOf[DistributedLDAModel]
-
-            // Find
-            ldaModel = time { mu findTopics(ldaModel, newdoc2, newvocabArray2, numWordsByTopics, true) }
-
-            */
-
 
             iComm +=1
         }
-
-
 
         // Generate Vertices
         val collectionVertices = ArrayBuffer[(Long, String)]()
@@ -333,7 +285,7 @@ object GraphxTesting {
         collectionVertices += ((132988448L, "Jean"))
 
         // Convert it to RDD
-        val VerticesRDD= ru ArrayToVertices(sc, collectionVertices)
+        val VerticesRDD = ru ArrayToVertices(sc, collectionVertices)
 
         // Generate Hash
         val random = abs(gu murmurHash64A("MichaelCaraccio".getBytes))

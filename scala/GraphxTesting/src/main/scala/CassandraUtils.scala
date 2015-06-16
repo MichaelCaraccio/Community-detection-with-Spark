@@ -57,7 +57,7 @@ class CassandraUtils {
         println(color("\nCall getTweetsIDFromUser" , RED))
         println("Tweets found:")
 
-        val query = sc.cassandraTable("twitter", "users_communicate").select("tweet_id").where("user_send_id = ?", id)
+        val query = sc.cassandraTable("twitter", "users_communicate").select("tweet_id").where("user_send_local_id = ?", id)
 
         // Result will be stored in an array
         var result = ArrayBuffer[String]()

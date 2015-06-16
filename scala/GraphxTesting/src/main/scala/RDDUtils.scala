@@ -77,7 +77,7 @@ class RDDUtils {
     def findUserIDByNameInGraph(graph:Graph[String,String], userName:String) : String = {
         println(color("\nCall : findUserIDWithName", RED))
 
-        graph.vertices.filter( _._2 == "Michael" ).collect.foreach {
+        graph.vertices.filter( _._2 == userName).collect.foreach {
             (e: (org.apache.spark.graphx.VertexId, String)) => return e._1.toString
         }
         "0"
