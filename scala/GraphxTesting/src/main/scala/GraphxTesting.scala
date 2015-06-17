@@ -1,35 +1,16 @@
-import CassandraUtils.CassandraUtils
-import MllibUtils.MllibUtils
-import CommunityUtils.CommunityUtils
-import GraphUtils.GraphUtils
-import RDDUtils.RDDUtils
+import org.apache.log4j.{Level, Logger}
+import org.apache.spark.graphx._
+import org.apache.spark.mllib.clustering.LDA
+import org.apache.spark.mllib.linalg.Vector
+import org.apache.spark.{SparkConf, SparkContext}
+import utils._
 
 import scala.collection.mutable.ArrayBuffer
 import scala.math._
 
-import org.apache.spark.mllib.linalg.{Vector, DenseMatrix, Matrix, Vectors}
-
-import org.apache.spark.SparkContext
-import org.apache.spark.SparkContext._
-import org.apache.spark.SparkConf
-
-import org.apache.log4j.Logger
-import org.apache.log4j.Level
-
-import org.apache.spark.graphx._
-import org.apache.spark.graphx.lib._
-import org.apache.spark.graphx.PartitionStrategy._
-import org.apache.spark.mllib.clustering.LDA
-import org.apache.spark.mllib.linalg.Vectors
-import org.apache.spark.mllib.clustering._
-import org.apache.spark.mllib.clustering.{EMLDAOptimizer, OnlineLDAOptimizer, DistributedLDAModel, LDA}
-
-
 // To make some of the examples work we will also need RDD
+
 import org.apache.spark.rdd.RDD
-
-import scala.reflect.ClassTag
-
 
 // Useful links
 // http://ampcamp.berkeley.edu/big-data-mini-course/graph-analytics-with-graphx.html
@@ -39,8 +20,6 @@ object GraphxTesting {
 
     val RED = "\033[1;30m"
     val ENDC = "\033[0m"
-
-    def color(str: String, col: String): String = "%s%s%s".format(col, str, ENDC)
 
     def main(args: Array[String]) {
 
@@ -71,7 +50,7 @@ object GraphxTesting {
         val sc = new SparkContext(sparkConf)
 
         // Create Vertices and Edges
-        val(users, relationships, defaultUser) = initGraph(sc)
+        val (users, relationships, defaultUser) = initGraph(sc)
 
         // Build the initial Graph
         val graph = Graph(users, relationships, defaultUser).cache()
@@ -206,7 +185,9 @@ object GraphxTesting {
 
         //time { comUtils cc(graph, graph.vertices) }
 
-        val subGraphes = time { comUtils splitCommunity(graph, users, false) }
+        val subGraphes = time {
+            comUtils splitCommunity(graph, users, false)
+        }
 
         println("\n--------------------------------------------------------------")
         println("Second Step - Calculate LDA for every communities\n" +
@@ -215,69 +196,77 @@ object GraphxTesting {
         println("--------------------------------------------------------------")
         var iComm = 1
         //for (community <- subGraphes){
-            println("--------------------------")
-            println("Community : " + iComm)
-            println("--------------------------")
-            //community.edges.collect().foreach(println(_))
-            //community.vertices.collect().foreach(println(_))
+        println("--------------------------")
+        println("Community : " + iComm)
+        println("--------------------------")
+        //community.edges.collect().foreach(println(_))
+        //community.vertices.collect().foreach(println(_))
 
-            println("--------------------------")
-            println("Get Tweets from Edges")
-            println("--------------------------")
-            //val corpus = time { cu getTweetsContentFromEdge(sc, community.edges, false) }
+        println("--------------------------")
+        println("Get Tweets from Edges")
+        println("--------------------------")
+        //val corpus = time { cu getTweetsContentFromEdge(sc, community.edges, false) }
 
-            println("--------------------------")
-            println("LDA Algorithm")
-            println("--------------------------")
-            val numTopics = 5
-            val numIterations = 10
-            val numWordsByTopics = 5
-            val numStopwords  = 0
+        println("--------------------------")
+        println("LDA Algorithm")
+        println("--------------------------")
+        val numTopics = 5
+        val numIterations = 10
+        val numWordsByTopics = 5
+        val numStopwords = 0
 
-            // Initialize LDA
-            println(color("\nCall InitLDA", RED))
+        // Initialize LDA
+        println(color("\nCall InitLDA", RED))
 
-            val topicSmoothing = 1.2
-            val termSmoothing = 1.2
+        val topicSmoothing = 1.2
+        val termSmoothing = 1.2
 
-            // Set LDA parameters
-            val lda = new LDA()
-                .setOptimizer("online")
-                .setK(numTopics)
-                .setDocConcentration(topicSmoothing)
-                .setTopicConcentration(termSmoothing)
-                .setMaxIterations(numIterations)
+        // Set LDA parameters
+        val lda = new LDA()
+            .setOptimizer("online")
+            .setK(numTopics)
+            .setDocConcentration(topicSmoothing)
+            .setTopicConcentration(termSmoothing)
+            .setMaxIterations(numIterations)
 
-            // Create documents
-            var firstDoc = ArrayBuffer[String]()
-            firstDoc += "Concentration parameter commonly named for the prior placed"
+        // Create documents
+        var firstDoc = ArrayBuffer[String]()
+        firstDoc += "Concentration parameter commonly named for the prior placed"
 
-            // Init LDA
-            val mu = new MllibUtils(lda, sc, firstDoc, firstDoc)
+        // Init LDA
+        val mu = new MllibUtils(lda, sc, firstDoc, firstDoc)
 
-            // First tweet
-            mu newTweet("Concentration distributions topics Concentration")
+        // First tweet
+        mu newTweet ("Concentration distributions topics Concentration")
 
-            // Get documents and word's array
-            val (newdoc:RDD[(Long, Vector)], newvocabArray) = time { mu createDocuments(sc, 0) }
+        // Get documents and word's array
+        val (newdoc: RDD[(Long, Vector)], newvocabArray) = time {
+            mu createDocuments(sc, 0)
+        }
 
-            var ldaModel = lda.run(newdoc)
+        var ldaModel = lda.run(newdoc)
 
-            // Find topics
-            ldaModel = time { mu findTopics(ldaModel, newvocabArray, numWordsByTopics, true) }
+        // Find topics
+        ldaModel = time {
+            mu findTopics(ldaModel, newvocabArray, numWordsByTopics, true)
+        }
 
-            // Second tweet
-            mu newTweet("October arrived, spreading a damp chill")
+        // Second tweet
+        mu newTweet ("October arrived, spreading a damp chill")
 
-            val (newdoc2:RDD[(Long, Vector)], newvocabArray2) = time { mu createDocuments(sc, 0) }
+        val (newdoc2: RDD[(Long, Vector)], newvocabArray2) = time {
+            mu createDocuments(sc, 0)
+        }
 
-            ldaModel = lda.run(newdoc2)
+        ldaModel = lda.run(newdoc2)
 
-            // Find
-            ldaModel = time { mu findTopics(ldaModel, newvocabArray2, numWordsByTopics, true) }
+        // Find
+        ldaModel = time {
+            mu findTopics(ldaModel, newvocabArray2, numWordsByTopics, true)
+        }
 
 
-            iComm +=1
+        iComm += 1
         //}
 
         // Generate Vertices
@@ -289,7 +278,7 @@ object GraphxTesting {
         val VerticesRDD = ru ArrayToVertices(sc, collectionVertices)
 
         // Generate Hash
-        val random = abs(gu murmurHash64A("MichaelCaraccio".getBytes))
+        val random = abs(gu murmurHash64A ("MichaelCaraccio".getBytes))
 
         // Add edges
         val collectionEdge = ArrayBuffer[Edge[String]]()
@@ -310,42 +299,30 @@ object GraphxTesting {
     /**
      * @constructor time
      *
-     * timer for profiling block
+     *              timer for profiling block
      *
      * @param R $block - Block executed
      * @return Unit
      */
     def time[R](block: => R): R = {
         val t0 = System.nanoTime()
-        val result = block    // call-by-name
+        val result = block // call-by-name
         val t1 = System.nanoTime()
         println("Elapsed time: " + (t1 - t0) / 1000000000.0 + " seconds")
         result
     }
 
     /**
-     * @constructor
-     *
-     *
-     *
-     * @param
-     * @return
-     */
-    /*def isVerticeInGraph(): Unit ={
-
-    }*/
-
-    /**
      * @constructor initGraph
      *
-     * init data - construct graph and populate it
+     *              init data - construct graph and populate it
      *
      * @param SparkContext $sc - Sparkcontext
      * @return RDD[(VertexId, (String))] - users (Vertices)
      *         RDD[Edge[String]] - relationship (Edges)
      *         String - default user
      */
-    def initGraph(sc:SparkContext): (RDD[(VertexId, (String))], RDD[Edge[String]], String) ={
+    def initGraph(sc: SparkContext): (RDD[(VertexId, (String))], RDD[Edge[String]], String) = {
         println(color("\nCall : initGraph", RED))
 
         // Create an RDD for the vertices
@@ -400,8 +377,8 @@ object GraphxTesting {
                 Edge(601389784L, 2732329846L, "608918359913164801"),
                 Edge(2732329846L, 2941487254L, "608920468985266176"),
                 Edge(2732329846L, 2941487254L, "608918157806432257"),
-                Edge(2564641105L,1518391292L,"608918942086799360"),
-                Edge(1518391292L,2564641105L,"608921314104094720")
+                Edge(2564641105L, 1518391292L, "608918942086799360"),
+                Edge(1518391292L, 2564641105L, "608921314104094720")
             ))
 
         // Define a default user in case there are relationship with missing user
@@ -409,4 +386,18 @@ object GraphxTesting {
 
         (users, relationships, defaultUser)
     }
+
+    /**
+     * @constructor
+     *
+     *
+     *
+     * @param
+     * @return
+     */
+    /*def isVerticeInGraph(): Unit ={
+
+    }*/
+
+    def color(str: String, col: String): String = "%s%s%s".format(col, str, ENDC)
 }
