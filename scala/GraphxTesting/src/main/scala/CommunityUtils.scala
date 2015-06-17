@@ -37,7 +37,7 @@ class CommunityUtils extends Logging with Serializable {
 
         println(color("\nCall SplitCommunity" , RED))
 
-        val graph_2 = getKCoreGraph(graph, users, 4, false).cache()
+        val graph_2 = getKCoreGraph(graph, users, 2, false).cache()
 
         // Find the connected components
         val cc = graph_2.connectedComponents().vertices

@@ -61,7 +61,7 @@ object FinalProject {
     def main(args: Array[String]) {
 
         println("\n\n**************************************************************")
-        println("******************       GraphxTesting      ******************")
+        println("******************       FinalProject      ******************")
         println("**************************************************************\n")
 
         val cu = new CassandraUtils
@@ -118,7 +118,7 @@ object FinalProject {
         System.setProperty("twitter4j.oauth.accessTokenSecret", "UIMZ1aD06DObpKI741zC8wHZF8jkj1bh02Lqfl5cQ76Pl")
 
         val ssc = new StreamingContext(sparkConf, Seconds(10))
-        val stream = TwitterUtils.createStream(ssc, None)
+        val stream = TwitterUtils.createStream(ssc, None, words)
 
         // Init SparkContext
         val sc = ssc.sparkContext
@@ -179,8 +179,6 @@ object FinalProject {
         // Save communication's informations in Cassandra
         // ************************************************************
         commStream.foreachRDD(rdd => {
-            // Getting current context
-            val currentContext = rdd.context
 
             // RDD -> Array()
             val tabValues = rdd.collect()
@@ -219,7 +217,7 @@ object FinalProject {
                         collectionEdge += Edge(sendID, destID, item._1)
 
                         // TODO : Optimize save to cassandra with concatenate seq and save it when the loop is over
-                        val collection = currentContext.parallelize(Seq((item._1, item._2,sendID, destID)))
+                        val collection = rdd.context.parallelize(Seq((item._1, item._2,sendID, destID)))
 
                         collection.saveToCassandra(
                             "twitter",
@@ -240,11 +238,15 @@ object FinalProject {
             val EdgeRDD = ru ArrayToEdges(sc, collectionEdge)
 
             // Create Graph
-            val testGraph = Graph(VerticesRDD, EdgeRDD)
+            val testGraph = time { Graph(VerticesRDD, EdgeRDD) }
 
-            println("Comm saved : " + rdd.count())
+            println("Comm saved in cassandra: " + testGraph.vertices.collect.length)
+            println("Graph : " + testGraph.vertices.collect.length + " Vertices and " + testGraph.edges.collect.length + " edges")
             testGraph.vertices.collect.foreach(println(_))
             testGraph.edges.collect.foreach(println(_))
+
+            val subGraphes = time { comUtils splitCommunity(testGraph,  testGraph.vertices, true) }
+
         })
 
 

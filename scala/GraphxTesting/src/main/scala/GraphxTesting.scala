@@ -22,6 +22,7 @@ import org.apache.spark.graphx.PartitionStrategy._
 import org.apache.spark.mllib.clustering.LDA
 import org.apache.spark.mllib.linalg.Vectors
 import org.apache.spark.mllib.clustering._
+import org.apache.spark.mllib.clustering.{EMLDAOptimizer, OnlineLDAOptimizer, DistributedLDAModel, LDA}
 
 
 // To make some of the examples work we will also need RDD
@@ -75,7 +76,7 @@ object GraphxTesting {
         // Build the initial Graph
         val graph = Graph(users, relationships, defaultUser).cache()
 
-
+        /*
 
         println("\n**************************************************************")
         println("                       TEST METHODS                           ")
@@ -109,7 +110,7 @@ object GraphxTesting {
         resultGetTweetsIDFromUser.foreach(println(_))
 
         // Count in and out degrees
-        time { gu inAndOutDegrees(graph) }
+        //time { gu inAndOutDegrees(graph) }
 
 
         println("\n--------------------------------------------------------------")
@@ -190,7 +191,7 @@ object GraphxTesting {
         val nStopwords  = 20
         time { mu getLDA(sc, corpusWords, nTopics, nIterations, nWordsByTopics, nStopwords, true) }*/
 
-
+        */
 
 
         println("\n**************************************************************")
@@ -213,17 +214,17 @@ object GraphxTesting {
             "\t 2. LDA Algorithm")
         println("--------------------------------------------------------------")
         var iComm = 1
-        for (community <- subGraphes){
+        //for (community <- subGraphes){
             println("--------------------------")
             println("Community : " + iComm)
             println("--------------------------")
             //community.edges.collect().foreach(println(_))
-            community.vertices.collect().foreach(println(_))
+            //community.vertices.collect().foreach(println(_))
 
             println("--------------------------")
             println("Get Tweets from Edges")
             println("--------------------------")
-            val corpus = time { cu getTweetsContentFromEdge(sc, community.edges, false) }
+            //val corpus = time { cu getTweetsContentFromEdge(sc, community.edges, false) }
 
             println("--------------------------")
             println("LDA Algorithm")
@@ -241,11 +242,11 @@ object GraphxTesting {
 
             // Set LDA parameters
             val lda = new LDA()
+                .setOptimizer("online")
                 .setK(numTopics)
                 .setDocConcentration(topicSmoothing)
                 .setTopicConcentration(termSmoothing)
                 .setMaxIterations(numIterations)
-                //.setOptimizer("online")
 
             // Create documents
             var firstDoc = ArrayBuffer[String]()
@@ -260,7 +261,7 @@ object GraphxTesting {
             // Get documents and word's array
             val (newdoc:RDD[(Long, Vector)], newvocabArray) = time { mu createDocuments(sc, 0) }
 
-            var ldaModel:DistributedLDAModel = lda.run(newdoc).asInstanceOf[DistributedLDAModel]
+            var ldaModel = lda.run(newdoc)
 
             // Find topics
             ldaModel = time { mu findTopics(ldaModel, newvocabArray, numWordsByTopics, true) }
@@ -270,14 +271,14 @@ object GraphxTesting {
 
             val (newdoc2:RDD[(Long, Vector)], newvocabArray2) = time { mu createDocuments(sc, 0) }
 
-            var ldaModel2:DistributedLDAModel = lda.run(newdoc2).asInstanceOf[DistributedLDAModel]
+            ldaModel = lda.run(newdoc2)
 
             // Find
-            ldaModel2 = time { mu findTopics(ldaModel2, newvocabArray2, numWordsByTopics, true) }
+            ldaModel = time { mu findTopics(ldaModel, newvocabArray2, numWordsByTopics, true) }
 
 
             iComm +=1
-        }
+        //}
 
         // Generate Vertices
         val collectionVertices = ArrayBuffer[(Long, String)]()
