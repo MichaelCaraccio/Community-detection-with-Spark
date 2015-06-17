@@ -1,25 +1,15 @@
-package GraphUtils
-
-import scala.collection.mutable.ArrayBuffer
-
-import org.apache.spark.SparkContext
-import org.apache.spark.SparkContext._
-import org.apache.spark.SparkConf
+package utils
 
 // To make some of the examples work we will also need RDD
 
-import org.apache.spark.rdd.RDD
 import org.apache.spark.graphx._
+import org.apache.spark.rdd.RDD
 
 
 class GraphUtils {
 
     val RED = "\033[1;30m"
     val ENDC = "\033[0m"
-
-    def color(str: String, col: String): String = "%s%s%s".format(col, str, ENDC)
-
-
     private val defaultSeed = 0xadc83b19L
 
     /**
@@ -109,4 +99,6 @@ class GraphUtils {
             case (id, u) => println(s"User $id is called ${u.name} and received ${u.inDeg} tweets and send ${u.outDeg}.")
         }
     }
+
+    def color(str: String, col: String): String = "%s%s%s".format(col, str, ENDC)
 }

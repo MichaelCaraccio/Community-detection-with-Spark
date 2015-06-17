@@ -1,13 +1,12 @@
-package MllibUtils
+package utils
+
+import org.apache.spark.SparkContext
+import org.apache.spark.mllib.clustering.{LDA, _}
+import org.apache.spark.mllib.linalg.{Vector, Vectors}
+import org.apache.spark.rdd.RDD
 
 import scala.collection.mutable
-import org.apache.spark.mllib.clustering._
-import org.apache.spark.mllib.linalg.{Vector, DenseMatrix, Matrix, Vectors}
 import scala.collection.mutable.ArrayBuffer
-
-import org.apache.spark.rdd.RDD
-import org.apache.spark.SparkContext
-import org.apache.spark.mllib.clustering.LDA
 
 /**
  * Topic models automatically infer the topics discussed in a collection of documents. These topics can be used

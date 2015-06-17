@@ -1,48 +1,21 @@
-import CassandraUtils.CassandraUtils
-import MllibUtils.MllibUtils
-import CommunityUtils.CommunityUtils
-import GraphUtils.GraphUtils
-import RDDUtils.RDDUtils
+import org.apache.log4j.{Level, Logger}
+import org.apache.spark.SparkConf
+import org.apache.spark.graphx._
+import org.apache.spark.streaming._
+import org.apache.spark.streaming.twitter.TwitterUtils
+import utils._
 
 import scala.collection.mutable.ArrayBuffer
 import scala.math._
 
-import org.apache.spark.mllib.linalg.{Vector, DenseMatrix, Matrix, Vectors}
-
-import org.apache.spark.SparkContext
-import org.apache.spark.SparkContext._
-import org.apache.spark.SparkConf
-
-import org.apache.log4j.Logger
-import org.apache.log4j.Level
-
-import org.apache.spark.graphx._
-import org.apache.spark.graphx.lib._
-import org.apache.spark.graphx.PartitionStrategy._
-import org.apache.spark.mllib.clustering.LDA
-import org.apache.spark.mllib.linalg.Vectors
-import org.apache.spark.mllib.clustering._
-
-
-import org.apache.spark.streaming.twitter._
-import org.apache.spark.streaming.twitter
-import org.apache.spark.streaming.twitter.TwitterUtils
-import org.apache.spark.streaming.twitter.TwitterUtils._
-import org.apache.spark.streaming._
-
 // Cassandra
 
 import com.datastax.spark.connector._
-import com.datastax.spark.connector.streaming._
 
 import scala.util.matching.Regex
 
 
 // To make some of the examples work we will also need RDD
-
-import org.apache.spark.rdd.RDD
-
-import scala.reflect.ClassTag
 
 
 // Useful links
@@ -54,11 +27,10 @@ object FinalProject {
     // Terminal color
     val RED = "\033[1;30m"
     val ENDC = "\033[0m"
-
-    def color(str: String, col: String): String = "%s%s%s".format(col, str, ENDC)
-
     // Seed for murmurhash
     private val defaultSeed = 0xadc83b19L
+
+    def color(str: String, col: String): String = "%s%s%s".format(col, str, ENDC)
 
     def main(args: Array[String]) {
 

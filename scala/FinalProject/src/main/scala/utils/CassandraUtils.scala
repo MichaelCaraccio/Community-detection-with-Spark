@@ -1,10 +1,8 @@
-package CassandraUtils
-
-import scala.collection.mutable.ArrayBuffer
+package utils
 
 import org.apache.spark.SparkContext
-import org.apache.spark.SparkContext._
-import org.apache.spark.SparkConf
+
+import scala.collection.mutable.ArrayBuffer
 
 // Enable Cassandra-specific functions on the StreamingContext, DStream and RDD:
 
@@ -12,16 +10,14 @@ import com.datastax.spark.connector._
 
 // To make some of the examples work we will also need RDD
 
-import org.apache.spark.rdd.RDD
 import org.apache.spark.graphx._
+import org.apache.spark.rdd.RDD
 
 
 class CassandraUtils {
 
     val RED = "\033[1;30m"
     val ENDC = "\033[0m"
-
-    def color(str: String, col: String): String = "%s%s%s".format(col, str, ENDC)
 
     /**
      * @constructor getTweetContentFromID
@@ -44,6 +40,8 @@ class CassandraUtils {
         else
             "Tweet not found"
     }
+
+    def color(str: String, col: String): String = "%s%s%s".format(col, str, ENDC)
 
     /**
      * @constructor getTweetsIDFromUser

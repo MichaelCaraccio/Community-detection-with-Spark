@@ -1,23 +1,19 @@
-package RDDUtils
+package utils
+
+import org.apache.spark.SparkContext
 
 import scala.collection.mutable.ArrayBuffer
 
-import org.apache.spark.SparkContext
-import org.apache.spark.SparkContext._
-import org.apache.spark.SparkConf
-
 // To make some of the examples work we will also need RDD
 
-import org.apache.spark.rdd.RDD
 import org.apache.spark.graphx._
+import org.apache.spark.rdd.RDD
 
 
 class RDDUtils {
 
     val RED = "\033[1;30m"
     val ENDC = "\033[0m"
-
-    def color(str: String, col: String): String = "%s%s%s".format(col, str, ENDC)
 
     /**
      * @constructor ArrayToVertices
@@ -46,7 +42,6 @@ class RDDUtils {
     def ArrayToEdges(sc: SparkContext, collection: ArrayBuffer[Edge[String]]): RDD[Edge[String]] = {
         sc.parallelize(collection)
     }
-
 
     /**
      * @constructor findUserByIDInGraph
@@ -83,6 +78,8 @@ class RDDUtils {
         }
         "0"
     }
+
+    def color(str: String, col: String): String = "%s%s%s".format(col, str, ENDC)
 
     /**
      * @constructor displayAllCommunications

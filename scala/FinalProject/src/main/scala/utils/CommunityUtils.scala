@@ -1,15 +1,8 @@
-package CommunityUtils
+package utils
 
-import scala.collection.mutable
-
-import org.apache.spark.rdd.RDD
-import org.apache.spark.SparkContext
-import org.apache.spark.SparkContext._
 import org.apache.spark._
-
 import org.apache.spark.graphx._
-import org.apache.spark.graphx.lib._
-import org.apache.spark.graphx.PartitionStrategy._
+import org.apache.spark.rdd.RDD
 
 import scala.collection.mutable.ArrayBuffer
 import scala.math._
@@ -19,8 +12,6 @@ class CommunityUtils extends Logging with Serializable {
 
     val RED = "\033[1;30m"
     val ENDC = "\033[0m"
-
-    def color(str: String, col: String): String = "%s%s%s".format(col, str, ENDC)
 
     /**
      * splitCommunity
@@ -84,106 +75,6 @@ class CommunityUtils extends Logging with Serializable {
         }
 
         result
-    }
-
-    /**
-     * getTriangleCount
-     *
-     * Compute the number of triangles passing through each vertex.
-     *
-     * @param Graph[String,String] $graph - Graph element
-     * @param RDD[(VertexId, (String))] $users - Vertices
-     * @return Unit
-     *
-     * @see [[org.apache.spark.graphx.lib.TriangleCount$#run]]
-     */
-    def getTriangleCount(graph: Graph[String, String], users: RDD[(VertexId, (String))]): Unit = {
-
-        println(color("\nCall getTriangleCount", RED))
-
-        // Sort edges ID srcID < dstID
-        val edges = graph.edges.map { e =>
-            if (e.srcId < e.dstId) {
-                Edge(e.srcId, e.dstId, e.attr)
-            }
-            else {
-                Edge(e.dstId, e.srcId, e.attr)
-            }
-        }
-
-        // Temporary graph
-        val newGraph = Graph(users, edges, "").cache()
-
-        // Find the triangle count for each vertex
-        // TriangleCount requires the graph to be partitioned
-        val triCounts = newGraph.partitionBy(PartitionStrategy.RandomVertexCut).cache().triangleCount().vertices
-
-        val triCountByUsername = users.join(triCounts).map {
-            case (id, (username, rank)) => (id, username, rank)
-        }
-
-        println("Display triangle's sum for each user")
-        triCountByUsername.foreach(println)
-
-        println("\nTotal: " + triCountByUsername.map { case (id, username, rank) => rank }.distinct().count() + "\n")
-    }
-
-    /**
-     * @constructor ConnectedComponents
-     *
-     *              Compute the connected component membership of each vertex and return a graph with the vertex
-     *              value containing the lowest vertex id in the connected component containing that vertex.
-     *
-     * @param Graph[String,String] $graph - Graph element
-     * @param RDD[(VertexId, (String))] $users - Vertices
-     * @return Unit
-     *
-     * @see [[org.apache.spark.graphx.lib.ConnectedComponents$#run]]
-     */
-    def cc(graph: Graph[String, String], users: RDD[(VertexId, (String))]): Unit = {
-        println(color("\nCall ConnectedComponents", RED))
-
-        // Find the connected components
-        val cc = graph.connectedComponents().vertices
-
-        // Join the connected components with the usernames and id
-        val ccByUsername = users.join(cc).map {
-            case (id, (username, cc)) => (id, username, cc)
-        }
-        // Print the result
-        println(ccByUsername.collect().sortBy(_._3).mkString("\n"))
-
-        println("\nTotal groups: " + ccByUsername.map { case (id, username, cc) => cc }.distinct().count() + "\n")
-    }
-
-    /**
-     * @constructor StronglyConnectedComponents
-     *
-     *              Compute the strongly connected component (SCC) of each vertex and return a graph with the
-     *              vertex value containing the lowest vertex id in the SCC containing that vertex.
-     *
-     *              Display edges's membership and total groups
-     *
-     * @param Graph[String,String] $graph - Graph element
-     * @param Int $iteration - Number of iteration
-     * @return Unit
-     */
-    def scc(graph: Graph[String, String], iteration: Int): Unit = {
-
-        println(color("\nCall StronglyConnectedComponents : iteration : " + iteration, RED))
-        val sccGraph = graph.stronglyConnectedComponents(5)
-
-        val connectedGraph = sccGraph.vertices.map {
-            case (member, leaderGroup) => s"$member is in the group of $leaderGroup's edge"
-        }
-
-        val totalGroups = sccGraph.vertices.map {
-            case (member, leaderGroup) => leaderGroup
-        }
-
-        connectedGraph.collect.foreach(println)
-
-        println("\nTotal groups: " + totalGroups.distinct().count() + "\n")
     }
 
     /**
@@ -293,5 +184,107 @@ class CommunityUtils extends Logging with Serializable {
 
         // Note that initial message should have no effect
         Pregel(graph, 0)(vProg, sendMsg, mergeMsg)
+    }
+
+    /**
+     * getTriangleCount
+     *
+     * Compute the number of triangles passing through each vertex.
+     *
+     * @param Graph[String,String] $graph - Graph element
+     * @param RDD[(VertexId, (String))] $users - Vertices
+     * @return Unit
+     *
+     * @see [[org.apache.spark.graphx.lib.TriangleCount$#run]]
+     */
+    def getTriangleCount(graph: Graph[String, String], users: RDD[(VertexId, (String))]): Unit = {
+
+        println(color("\nCall getTriangleCount", RED))
+
+        // Sort edges ID srcID < dstID
+        val edges = graph.edges.map { e =>
+            if (e.srcId < e.dstId) {
+                Edge(e.srcId, e.dstId, e.attr)
+            }
+            else {
+                Edge(e.dstId, e.srcId, e.attr)
+            }
+        }
+
+        // Temporary graph
+        val newGraph = Graph(users, edges, "").cache()
+
+        // Find the triangle count for each vertex
+        // TriangleCount requires the graph to be partitioned
+        val triCounts = newGraph.partitionBy(PartitionStrategy.RandomVertexCut).cache().triangleCount().vertices
+
+        val triCountByUsername = users.join(triCounts).map {
+            case (id, (username, rank)) => (id, username, rank)
+        }
+
+        println("Display triangle's sum for each user")
+        triCountByUsername.foreach(println)
+
+        println("\nTotal: " + triCountByUsername.map { case (id, username, rank) => rank }.distinct().count() + "\n")
+    }
+
+    /**
+     * @constructor ConnectedComponents
+     *
+     *              Compute the connected component membership of each vertex and return a graph with the vertex
+     *              value containing the lowest vertex id in the connected component containing that vertex.
+     *
+     * @param Graph[String,String] $graph - Graph element
+     * @param RDD[(VertexId, (String))] $users - Vertices
+     * @return Unit
+     *
+     * @see [[org.apache.spark.graphx.lib.ConnectedComponents$#run]]
+     */
+    def cc(graph: Graph[String, String], users: RDD[(VertexId, (String))]): Unit = {
+        println(color("\nCall ConnectedComponents", RED))
+
+        // Find the connected components
+        val cc = graph.connectedComponents().vertices
+
+        // Join the connected components with the usernames and id
+        val ccByUsername = users.join(cc).map {
+            case (id, (username, cc)) => (id, username, cc)
+        }
+        // Print the result
+        println(ccByUsername.collect().sortBy(_._3).mkString("\n"))
+
+        println("\nTotal groups: " + ccByUsername.map { case (id, username, cc) => cc }.distinct().count() + "\n")
+    }
+
+    def color(str: String, col: String): String = "%s%s%s".format(col, str, ENDC)
+
+    /**
+     * @constructor StronglyConnectedComponents
+     *
+     *              Compute the strongly connected component (SCC) of each vertex and return a graph with the
+     *              vertex value containing the lowest vertex id in the SCC containing that vertex.
+     *
+     *              Display edges's membership and total groups
+     *
+     * @param Graph[String,String] $graph - Graph element
+     * @param Int $iteration - Number of iteration
+     * @return Unit
+     */
+    def scc(graph: Graph[String, String], iteration: Int): Unit = {
+
+        println(color("\nCall StronglyConnectedComponents : iteration : " + iteration, RED))
+        val sccGraph = graph.stronglyConnectedComponents(5)
+
+        val connectedGraph = sccGraph.vertices.map {
+            case (member, leaderGroup) => s"$member is in the group of $leaderGroup's edge"
+        }
+
+        val totalGroups = sccGraph.vertices.map {
+            case (member, leaderGroup) => leaderGroup
+        }
+
+        connectedGraph.collect.foreach(println)
+
+        println("\nTotal groups: " + totalGroups.distinct().count() + "\n")
     }
 }
