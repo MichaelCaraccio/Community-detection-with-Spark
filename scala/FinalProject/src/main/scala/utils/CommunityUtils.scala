@@ -45,9 +45,9 @@ class CommunityUtils extends Logging with Serializable {
         // Result will be stored in an array
         var result = ArrayBuffer[Graph[String, String]]()
         println("--------------------------")
-        println("Total community found: " + lowerIDPerCommunity.toArray.size)
+        println("Total community found: " + lowerIDPerCommunity.collect().length)
         println("--------------------------")
-        for (id <- lowerIDPerCommunity.toArray) {
+        for (id <- lowerIDPerCommunity.collect()) {
 
             println("\nCommunity ID : " + id)
 
@@ -102,12 +102,12 @@ class CommunityUtils extends Logging with Serializable {
                                                   displayResult: Boolean): Graph[String, ED] = {
 
         // Graph[(Int, Boolean), ED] - boolean indicates whether it is active or not
-        var g = graph.outerJoinVertices(graph.degrees)((vid, oldData, newData) => newData.getOrElse(0)).cache
+        var g = graph.outerJoinVertices(graph.degrees)((vid, oldData, newData) => newData.getOrElse(0)).cache()
         val degrees = graph.degrees
 
         println(color("\nCall KCoreDecomposition", RED))
 
-        g = computeCurrentKCore(g, kmin).cache
+        g = computeCurrentKCore(g, kmin).cache()
         val testK = kmin
         val vCount = g.vertices.filter { case (vid, vd) => vd >= kmin }.count()
         val eCount = g.triplets.map { t => t.srcAttr >= testK && t.dstAttr >= testK }.count()
@@ -117,12 +117,12 @@ class CommunityUtils extends Logging with Serializable {
         // Display informations
         if (displayResult) {
 
-            val numVertices = degrees.count
+            val numVertices = degrees.count()
 
             logWarning(s"Number of vertices: $numVertices")
             logWarning(s"Degree sample: ${degrees.take(10).mkString(", ")}")
-            logWarning(s"Degree distribution: " + degrees.map { case (vid, data) => (data, 1) }.reduceByKey((_ + _)).collect().mkString(", "))
-            logWarning(s"Degree distribution: " + degrees.map { case (vid, data) => (data, 1) }.reduceByKey((_ + _)).take(10).mkString(", "))
+            logWarning(s"Degree distribution: " + degrees.map { case (vid, data) => (data, 1) }.reduceByKey(_ + _).collect().mkString(", "))
+            logWarning(s"Degree distribution: " + degrees.map { case (vid, data) => (data, 1) }.reduceByKey(_ + _).take(10).mkString(", "))
             logWarning(s"K=$kmin, V=$vCount, E=$eCount")
         }
 
@@ -283,7 +283,7 @@ class CommunityUtils extends Logging with Serializable {
             case (member, leaderGroup) => leaderGroup
         }
 
-        connectedGraph.collect.foreach(println)
+        connectedGraph.collect().foreach(println)
 
         println("\nTotal groups: " + totalGroups.distinct().count() + "\n")
     }

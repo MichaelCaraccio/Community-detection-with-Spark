@@ -51,7 +51,7 @@ class MllibUtils(_lda: LDA, _sc: SparkContext, _dictionnary: ArrayBuffer[String]
         // Add tweet to dictionnary
         addToDictionnary(newTweet)
 
-        currentTweetRDD.collect.foreach(println(_))
+        currentTweetRDD.collect().foreach(println(_))
     }
 
     /**
@@ -135,7 +135,7 @@ class MllibUtils(_lda: LDA, _sc: SparkContext, _dictionnary: ArrayBuffer[String]
         val termCounts: Array[(String, Long)] = tokenizedCorpus.flatMap(_.map(_ -> 1L)).reduceByKey(_ + _).collect().sortBy(-_._2)
 
         // vocabArray contains all distinct words
-        val vocabArray: Array[String] = termCounts.takeRight(termCounts.size - numStopwords).map(_._1)
+        val vocabArray: Array[String] = termCounts.takeRight(termCounts.length - numStopwords).map(_._1)
 
 
         // Map[String, Int] of words and theirs places in tweet
@@ -151,7 +151,7 @@ class MllibUtils(_lda: LDA, _sc: SparkContext, _dictionnary: ArrayBuffer[String]
                 val idx = vocab(tokens)
 
                 // Count word occurancy
-                counts(idx) = counts.getOrElse(idx, 0.0) + tokenizedTweet.collect.flatten.count(_ == tokens)
+                counts(idx) = counts.getOrElse(idx, 0.0) + tokenizedTweet.collect().flatten.count(_ == tokens)
 
                 // Return word ID and Vector
                 (id.toLong, Vectors.sparse(vocab.size, counts.toSeq))
@@ -161,7 +161,7 @@ class MllibUtils(_lda: LDA, _sc: SparkContext, _dictionnary: ArrayBuffer[String]
         val documentsRDD = sc.parallelize(documents.toSeq)
 
         // Display RDD
-        documentsRDD.collect.foreach(println(_))
+        documentsRDD.collect().foreach(println(_))
 
         // Return
         (documentsRDD, vocabArray)

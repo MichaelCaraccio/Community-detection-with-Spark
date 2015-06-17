@@ -55,7 +55,7 @@ class RDDUtils {
     def findUserNameByIDInGraph(graph: Graph[String, String], userID: Int): String = {
         println(color("\nCall : findUserNameWithID", RED))
 
-        graph.vertices.filter { case (id, name) => id == userID }.collect.foreach {
+        graph.vertices.filter { case (id, name) => id.toString equals userID.toString }.collect().foreach {
             (e: (org.apache.spark.graphx.VertexId, String)) => return e._2
         }
         "user not found"
@@ -73,7 +73,7 @@ class RDDUtils {
     def findUserIDByNameInGraph(graph: Graph[String, String], userName: String): String = {
         println(color("\nCall : findUserIDWithName", RED))
 
-        graph.vertices.filter(_._2 == userName).collect.foreach {
+        graph.vertices.filter(_._2 == userName).collect().foreach {
             (e: (org.apache.spark.graphx.VertexId, String)) => return e._1.toString
         }
         "0"
@@ -97,6 +97,6 @@ class RDDUtils {
         val facts: RDD[String] = graph.triplets.map(triplet => triplet.srcAttr + " communicate with " +
             triplet.dstAttr + " with tweet id " + triplet.attr)
 
-        facts.collect.foreach(println(_))
+        facts.collect().foreach(println(_))
     }
 }

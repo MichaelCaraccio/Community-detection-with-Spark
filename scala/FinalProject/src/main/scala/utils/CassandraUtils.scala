@@ -1,17 +1,14 @@
 package utils
 
-import org.apache.spark.SparkContext
-
 import scala.collection.mutable.ArrayBuffer
 
 // Enable Cassandra-specific functions on the StreamingContext, DStream and RDD:
-
 import com.datastax.spark.connector._
 
 // To make some of the examples work we will also need RDD
-
 import org.apache.spark.graphx._
 import org.apache.spark.rdd.RDD
+import org.apache.spark.SparkContext
 
 
 class CassandraUtils {
@@ -35,7 +32,7 @@ class CassandraUtils {
         val query = sc.cassandraTable("twitter", "tweet_filtered").select("tweet_text").where("tweet_id = ?", id)
 
         if (query.collect().length != 0) {
-            query.first.getString("tweet_text")
+            query.first().getString("tweet_text")
         }
         else
             "Tweet not found"
@@ -63,7 +60,7 @@ class CassandraUtils {
         var result = ArrayBuffer[String]()
 
         if (query.collect().length != 0) {
-            result += query.first.getString("tweet_id")
+            result += query.first().getString("tweet_id")
         }
 
         // Display result
@@ -95,11 +92,11 @@ class CassandraUtils {
         var result = ArrayBuffer[String]()
 
         // Queries
-        for (tweet <- tweetsID.toArray) {
+        for (tweet <- tweetsID.collect()) {
             val query = sc.cassandraTable("twitter", "tweet_filtered").select("tweet_text").where("tweet_id = ?", tweet)
 
             if (query.collect().length != 0) {
-                result += query.first.getString("tweet_text")
+                result += query.first().getString("tweet_text")
             }
         }
 

@@ -12,6 +12,8 @@ import scala.math._
 
 import com.datastax.spark.connector._
 
+// Regex
+
 import scala.util.matching.Regex
 
 
@@ -27,6 +29,7 @@ object FinalProject {
     // Terminal color
     val RED = "\033[1;30m"
     val ENDC = "\033[0m"
+
     // Seed for murmurhash
     private val defaultSeed = 0xadc83b19L
 
@@ -99,7 +102,7 @@ object FinalProject {
         val usersStream = stream.map { status => (
             status.getUser.getId.toString,
             abs(murmurHash64A(status.getUser.getScreenName.getBytes)),
-            status.getUser.getName.toString,
+            status.getUser.getName,
             status.getUser.getLang,
             status.getUser.getFollowersCount.toString,
             status.getUser.getFriendsCount.toString,
@@ -171,7 +174,7 @@ object FinalProject {
                     val matches = pattern.findAllIn(item._5).toArray
 
                     // Sender ID
-                    val sendID: Long = abs(gu murmurHash64A (item._3.getBytes))
+                    val sendID: Long = abs(gu murmurHash64A item._3.getBytes)
 
                     collectionVertices += ((sendID, item._3))
 
@@ -182,7 +185,7 @@ object FinalProject {
                         val user_dest_name = destName.drop(1)
 
                         // Generate Hash
-                        val destID: Long = abs(gu murmurHash64A (user_dest_name.getBytes))
+                        val destID: Long = abs(gu murmurHash64A user_dest_name.getBytes)
 
                         // Create each users and edges
                         collectionVertices += ((destID, user_dest_name))
@@ -215,10 +218,10 @@ object FinalProject {
                 Graph(VerticesRDD, EdgeRDD)
             }
 
-            println("Comm saved in cassandra: " + testGraph.vertices.collect.length)
-            println("Graph : " + testGraph.vertices.collect.length + " Vertices and " + testGraph.edges.collect.length + " edges")
-            testGraph.vertices.collect.foreach(println(_))
-            testGraph.edges.collect.foreach(println(_))
+            println("Comm saved in cassandra: " + testGraph.vertices.collect().length)
+            println("Graph : " + testGraph.vertices.collect().length + " Vertices and " + testGraph.edges.collect().length + " edges")
+            testGraph.vertices.collect().foreach(println(_))
+            testGraph.edges.collect().foreach(println(_))
 
             val subGraphes = time {
                 comUtils splitCommunity(testGraph, testGraph.vertices, true)
@@ -399,10 +402,17 @@ object FinalProject {
     /**
      * @constructor murmurHash64A
      *
+     *              Murmur is a family of good general purpose hashing functions, suitable for non-cryptographic usage. As stated by Austin Appleby, MurmurHash provides the following benefits:
+     *              - good distribution (passing chi-squared tests for practically all keysets & bucket sizes.
+     *              - good avalanche behavior (max bias of 0.5%).
+     *              - good collision resistance (passes Bob Jenkin's frog.c torture-test. No collisions possible for 4-byte keys, no small (1- to 7-bit) differentials).
+     *              - great performance on Intel/AMD hardware, good tradeoff between hash quality and CPU consumption.
      *
-     * @param
-     * @param
-     * @return Long
+     *              Source : http://stackoverflow.com/questions/11899616/murmurhash-what-is-it
+     *
+     * @param Seq[Byte] - $data
+     * @param Long - $seed
+     * @return Long - Return hash
      *
      */
     def murmurHash64A(data: Seq[Byte], seed: Long = defaultSeed): Long = {
