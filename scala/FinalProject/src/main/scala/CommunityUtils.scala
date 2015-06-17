@@ -33,9 +33,9 @@ class CommunityUtils extends Logging with Serializable {
      * @return ArrayBuffer[Graph[String,String]] - Contains one graph per community
      *
      */
-    def splitCommunity(graph:Graph[String,String],users:RDD[(VertexId, (String))], displayResult:Boolean): ArrayBuffer[Graph[String,String]] ={
+    def splitCommunity(graph: Graph[String, String], users: RDD[(VertexId, (String))], displayResult: Boolean): ArrayBuffer[Graph[String, String]] = {
 
-        println(color("\nCall SplitCommunity" , RED))
+        println(color("\nCall SplitCommunity", RED))
 
         val graph_2 = getKCoreGraph(graph, users, 4, false).cache()
 
@@ -49,18 +49,20 @@ class CommunityUtils extends Logging with Serializable {
         }
 
         // Print the result
-        val lowerIDPerCommunity = ccByUsername.map{ case (id, username, cc) => cc }.distinct()
+        val lowerIDPerCommunity = ccByUsername.map { case (id, username, cc) => cc }.distinct()
 
         // Result will be stored in an array
-        var result = ArrayBuffer[Graph[String,String]]()
+        var result = ArrayBuffer[Graph[String, String]]()
         println("--------------------------")
         println("Total community found: " + lowerIDPerCommunity.toArray.size)
         println("--------------------------")
-        for (id <- lowerIDPerCommunity.toArray){
+        for (id <- lowerIDPerCommunity.toArray) {
 
             println("\nCommunity ID : " + id)
 
-            val subGraphVertices = ccByUsername.filter{_._3 == id}.map { case (id, username, cc) => (id, username)}
+            val subGraphVertices = ccByUsername.filter {
+                _._3 == id
+            }.map { case (id, username, cc) => (id, username) }
 
             //subGraphVertices.foreach(println(_))
 
@@ -72,7 +74,7 @@ class CommunityUtils extends Logging with Serializable {
         }
 
         // Display communities
-        if(displayResult){
+        if (displayResult) {
             println("\nCommunities found " + result.size)
             for (community <- result) {
                 println("-----------------------")
@@ -95,9 +97,9 @@ class CommunityUtils extends Logging with Serializable {
      *
      * @see [[org.apache.spark.graphx.lib.TriangleCount$#run]]
      */
-    def getTriangleCount(graph:Graph[String,String], users:RDD[(VertexId, (String))]): Unit ={
+    def getTriangleCount(graph: Graph[String, String], users: RDD[(VertexId, (String))]): Unit = {
 
-        println(color("\nCall getTriangleCount" , RED))
+        println(color("\nCall getTriangleCount", RED))
 
         // Sort edges ID srcID < dstID
         val edges = graph.edges.map { e =>
@@ -123,14 +125,14 @@ class CommunityUtils extends Logging with Serializable {
         println("Display triangle's sum for each user")
         triCountByUsername.foreach(println)
 
-        println("\nTotal: " + triCountByUsername.map{ case (id, username, rank) => rank }.distinct().count() + "\n")
+        println("\nTotal: " + triCountByUsername.map { case (id, username, rank) => rank }.distinct().count() + "\n")
     }
 
     /**
      * @constructor ConnectedComponents
      *
-     * Compute the connected component membership of each vertex and return a graph with the vertex
-     * value containing the lowest vertex id in the connected component containing that vertex.
+     *              Compute the connected component membership of each vertex and return a graph with the vertex
+     *              value containing the lowest vertex id in the connected component containing that vertex.
      *
      * @param Graph[String,String] $graph - Graph element
      * @param RDD[(VertexId, (String))] $users - Vertices
@@ -138,8 +140,8 @@ class CommunityUtils extends Logging with Serializable {
      *
      * @see [[org.apache.spark.graphx.lib.ConnectedComponents$#run]]
      */
-    def cc(graph:Graph[String,String], users:RDD[(VertexId, (String))]): Unit ={
-        println(color("\nCall ConnectedComponents" , RED))
+    def cc(graph: Graph[String, String], users: RDD[(VertexId, (String))]): Unit = {
+        println(color("\nCall ConnectedComponents", RED))
 
         // Find the connected components
         val cc = graph.connectedComponents().vertices
@@ -151,24 +153,24 @@ class CommunityUtils extends Logging with Serializable {
         // Print the result
         println(ccByUsername.collect().sortBy(_._3).mkString("\n"))
 
-        println("\nTotal groups: " + ccByUsername.map{ case (id, username, cc) => cc }.distinct().count() + "\n")
+        println("\nTotal groups: " + ccByUsername.map { case (id, username, cc) => cc }.distinct().count() + "\n")
     }
 
     /**
      * @constructor StronglyConnectedComponents
      *
-     * Compute the strongly connected component (SCC) of each vertex and return a graph with the
-     * vertex value containing the lowest vertex id in the SCC containing that vertex.
+     *              Compute the strongly connected component (SCC) of each vertex and return a graph with the
+     *              vertex value containing the lowest vertex id in the SCC containing that vertex.
      *
-     * Display edges's membership and total groups
+     *              Display edges's membership and total groups
      *
      * @param Graph[String,String] $graph - Graph element
      * @param Int $iteration - Number of iteration
      * @return Unit
      */
-    def scc(graph:Graph[String,String], iteration:Int): Unit ={
+    def scc(graph: Graph[String, String], iteration: Int): Unit = {
 
-        println(color("\nCall StronglyConnectedComponents : iteration : " + iteration , RED))
+        println(color("\nCall StronglyConnectedComponents : iteration : " + iteration, RED))
         val sccGraph = graph.stronglyConnectedComponents(5)
 
         val connectedGraph = sccGraph.vertices.map {
@@ -197,32 +199,32 @@ class CommunityUtils extends Logging with Serializable {
      * @param kmax the maximum value of k to decompose the graph
      *
      * @return a graph where the vertex attribute is the minimum of
-     * kmax or the highest value k for which that vertex was a member of
-     * the k-core.
+     *         kmax or the highest value k for which that vertex was a member of
+     *         the k-core.
      *
      * @note This method has the advantage of returning not just a single kcore of the
-     * graph but will yield all the cores for k > kmin.
+     *       graph but will yield all the cores for k > kmin.
      */
     def getKCoreGraph[VD: ClassTag, ED: ClassTag](graph: Graph[VD, ED],
-                                                  users:RDD[(VertexId, (String))],
+                                                  users: RDD[(VertexId, (String))],
                                                   kmin: Int,
-                                                  displayResult:Boolean): Graph[String,ED] = {
+                                                  displayResult: Boolean): Graph[String, ED] = {
 
         // Graph[(Int, Boolean), ED] - boolean indicates whether it is active or not
         var g = graph.outerJoinVertices(graph.degrees)((vid, oldData, newData) => newData.getOrElse(0)).cache
         val degrees = graph.degrees
 
-        println(color("\nCall KCoreDecomposition" , RED))
+        println(color("\nCall KCoreDecomposition", RED))
 
         g = computeCurrentKCore(g, kmin).cache
         val testK = kmin
-        val vCount = g.vertices.filter{ case (vid, vd) => vd >= kmin}.count()
-        val eCount = g.triplets.map{t => t.srcAttr >= testK && t.dstAttr >= testK }.count()
+        val vCount = g.vertices.filter { case (vid, vd) => vd >= kmin }.count()
+        val eCount = g.triplets.map { t => t.srcAttr >= testK && t.dstAttr >= testK }.count()
 
-        val v = g.vertices.filter{ case (vid, vd) => vd >= kmin}
+        val v = g.vertices.filter { case (vid, vd) => vd >= kmin }
 
         // Display informations
-        if(displayResult) {
+        if (displayResult) {
 
             val numVertices = degrees.count
 

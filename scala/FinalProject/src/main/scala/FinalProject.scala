@@ -31,6 +31,7 @@ import org.apache.spark.streaming.twitter.TwitterUtils._
 import org.apache.spark.streaming._
 
 // Cassandra
+
 import com.datastax.spark.connector._
 import com.datastax.spark.connector.streaming._
 
@@ -38,6 +39,7 @@ import scala.util.matching.Regex
 
 
 // To make some of the examples work we will also need RDD
+
 import org.apache.spark.rdd.RDD
 
 import scala.reflect.ClassTag
@@ -90,9 +92,6 @@ object FinalProject {
         //val graph = Graph(users, relationships, defaultUser).cache()
 
 
-
-
-
         // Filters by words that contains @
         val words = Array(" @")
 
@@ -125,7 +124,7 @@ object FinalProject {
 
 
         // Stream about users
-        val usersStream = stream.map{status => (
+        val usersStream = stream.map { status => (
             status.getUser.getId.toString,
             abs(murmurHash64A(status.getUser.getScreenName.getBytes)),
             status.getUser.getName.toString,
@@ -133,37 +132,38 @@ object FinalProject {
             status.getUser.getFollowersCount.toString,
             status.getUser.getFriendsCount.toString,
             status.getUser.getScreenName,
-            status.getUser.getStatusesCount.toString)}
+            status.getUser.getStatusesCount.toString)
+        }
 
 
         // Stream about communication between two users
-        val commStream = stream.map{status => (
+        val commStream = stream.map { status => (
             status.getId.toString, //tweet_id
             status.getUser.getId.toString, // user_send_twitter_ID
             status.getUser.getScreenName, // user_send_name
-            if(pattern.findFirstIn(status.getText).isEmpty)
-            {
+            if (pattern.findFirstIn(status.getText).isEmpty) {
                 ""
             }
-            else
-            {
+            else {
                 pattern.findFirstIn(status.getText).getOrElse("@MichaelCaraccio").tail
             },
             status.getText,
             status.getUser.getLang
-            )}
+            )
+        }
 
 
 
         // Stream about tweets
-        val tweetsStream = stream.map{status => (
+        val tweetsStream = stream.map { status => (
             status.getId.toString,
             status.getUser.getId.toString,
             abs(murmurHash64A(status.getUser.getScreenName.getBytes)),
             new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss").format(status.getCreatedAt),
             status.getRetweetCount.toString,
             status.getText
-            )}
+            )
+        }
 
 
         // ************************************************************
@@ -190,34 +190,34 @@ object FinalProject {
             val collectionEdge = ArrayBuffer[Edge[String]]()
 
             // For each tweets in RDD
-            for(item <- tabValues.toArray) {
+            for (item <- tabValues.toArray) {
 
                 // Avoid single @ in message
-                if(item._4 != "" && (item._6 == "en" || item._6 == "en-gb")){
+                if (item._4 != "" && (item._6 == "en" || item._6 == "en-gb")) {
 
                     // Find multiple dest
                     val matches = pattern.findAllIn(item._5).toArray
 
                     // Sender ID
-                    val sendID:Long = abs(gu murmurHash64A(item._3.getBytes))
+                    val sendID: Long = abs(gu murmurHash64A (item._3.getBytes))
 
                     collectionVertices += ((sendID, item._3))
 
 
                     // For each receiver in tweet
-                    matches.foreach{destName => {
+                    matches.foreach { destName => {
 
                         val user_dest_name = destName.drop(1)
 
                         // Generate Hash
-                        val destID:Long = abs(gu murmurHash64A(user_dest_name.getBytes))
+                        val destID: Long = abs(gu murmurHash64A (user_dest_name.getBytes))
 
                         // Create each users and edges
                         collectionVertices += ((destID, user_dest_name))
                         collectionEdge += Edge(sendID, destID, item._1)
 
                         // TODO : Optimize save to cassandra with concatenate seq and save it when the loop is over
-                        val collection = rdd.context.parallelize(Seq((item._1, item._2,sendID, destID)))
+                        val collection = rdd.context.parallelize(Seq((item._1, item._2, sendID, destID)))
 
                         collection.saveToCassandra(
                             "twitter",
@@ -227,7 +227,8 @@ object FinalProject {
                                 "user_send_twitter_id",
                                 "user_send_local_id",
                                 "user_dest_id"))
-                    }}
+                    }
+                    }
                 }
             }
 
@@ -238,14 +239,18 @@ object FinalProject {
             val EdgeRDD = ru ArrayToEdges(sc, collectionEdge)
 
             // Create Graph
-            val testGraph = time { Graph(VerticesRDD, EdgeRDD) }
+            val testGraph = time {
+                Graph(VerticesRDD, EdgeRDD)
+            }
 
             println("Comm saved in cassandra: " + testGraph.vertices.collect.length)
             println("Graph : " + testGraph.vertices.collect.length + " Vertices and " + testGraph.edges.collect.length + " edges")
             testGraph.vertices.collect.foreach(println(_))
             testGraph.edges.collect.foreach(println(_))
 
-            val subGraphes = time { comUtils splitCommunity(testGraph,  testGraph.vertices, true) }
+            val subGraphes = time {
+                comUtils splitCommunity(testGraph, testGraph.vertices, true)
+            }
 
         })
 
@@ -270,7 +275,7 @@ object FinalProject {
                                           status._7)}*/
 
             // For each tweets in RDD
-            for(item <- tabValues.toArray) {
+            for (item <- tabValues.toArray) {
 
                 // New tweet value
                 var newTweet = patternURL.replaceAllIn(item._6, "")
@@ -419,7 +424,6 @@ object FinalProject {
     }
 
 
-
     /**
      * @constructor murmurHash64A
      *
@@ -447,14 +451,14 @@ object FinalProject {
     /**
      * @constructor time
      *
-     * timer for profiling block
+     *              timer for profiling block
      *
      * @param R $block - Block executed
      * @return Unit
      */
     def time[R](block: => R): R = {
         val t0 = System.nanoTime()
-        val result = block    // call-by-name
+        val result = block // call-by-name
         val t1 = System.nanoTime()
         println("Elapsed time: " + (t1 - t0) / 1000000000.0 + " seconds")
         result

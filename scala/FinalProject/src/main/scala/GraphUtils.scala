@@ -7,6 +7,7 @@ import org.apache.spark.SparkContext._
 import org.apache.spark.SparkConf
 
 // To make some of the examples work we will also need RDD
+
 import org.apache.spark.rdd.RDD
 import org.apache.spark.graphx._
 
