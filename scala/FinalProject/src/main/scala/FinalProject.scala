@@ -3,6 +3,7 @@ import org.apache.spark.SparkConf
 import org.apache.spark.graphx._
 import org.apache.spark.streaming._
 import org.apache.spark.streaming.twitter.TwitterUtils
+import org.apache.spark.SparkContext
 import utils._
 
 import scala.collection.mutable.ArrayBuffer
@@ -56,16 +57,13 @@ object FinalProject {
 
         // Spark configuration
         val sparkConf = new SparkConf(true)
-            .setMaster("local[4]")
-            .setAppName("GraphxTesting")
+            .setMaster("local[2]")
+            .setAppName("GraphxTesting2")
+            .set("spark.driver.cores", "2")
+            .set("spark.driver.maxResultSize", "0") // no limit
+            .set("spark.executor.memory", "8g") // Amount of memory to use for the driver process
+            .set("spark.executor.memory", "8g") // Amount of memory to use per executor process
             .set("spark.cassandra.connection.host", "127.0.0.1") // Link to Cassandra
-
-        // Create Vertices and Edges
-        //val(users, relationships, defaultUser) = initGraph(sc)
-
-        // Build the initial Graph
-        //val graph = Graph(users, relationships, defaultUser).cache()
-
 
         // Filters by words that contains @
         val words = Array(" @")
@@ -75,11 +73,6 @@ object FinalProject {
         val patternURL = new Regex("(http|ftp|https)://[A-Za-z0-9-_]+.[A-Za-z0-9-_:%&?/.=]+")
         val patternSmiley = new Regex("((?::|;|=)(?:-)?(?:\\)|D|P|3|O))")
 
-        // First twitter instance : Used for stream
-        /*val twitterstream = new TwitterFactory().getInstance()
-        twitterstream.setOAuthConsumer("MCrQfOAttGZnIIkrqZ4lQA9gr", "5NnYhhGdfyqOE4pIXXdYkploCybQMzFJiQejZssK4a3mNdkCoa")
-        twitterstream.setOAuthAccessToken(new AccessToken("237197078-6zwzHsuB3VY3psD5873hhU3KQ1lSVQlOXyBhDqpG", "UIMZ1aD06DObpKI741zC8wHZF8jkj1bh02Lqfl5cQ76Pl"))
-        */
         System.setProperty("twitter4j.http.retryCount", "3")
         System.setProperty("twitter4j.http.retryIntervalSecs", "10")
         System.setProperty("twitter4j.async.numThreads", "10")
@@ -96,6 +89,8 @@ object FinalProject {
 
         // Init SparkContext
         val sc = ssc.sparkContext
+
+        val graph = loadGraphFromCassandra(cu, sc)
 
 
         // Stream about users
@@ -145,7 +140,7 @@ object FinalProject {
         // Save user's informations in Cassandra
         // ************************************************************
         usersStream.foreachRDD(rdd => {
-            rdd.saveToCassandra("twitter", "user_filtered", SomeColumns("user_twitter_id", "user_local_id", "user_name", "user_lang", "user_follow_count", "user_friends_count", "user_screen_name", "user_status_count"))
+            //rdd.saveToCassandra("twitter", "user_filtered", SomeColumns("user_twitter_id", "user_local_id", "user_name", "user_lang", "user_follow_count", "user_friends_count", "user_screen_name", "user_status_count"))
 
             println("Users saved : " + rdd.count())
         })
@@ -194,14 +189,14 @@ object FinalProject {
                         // TODO : Optimize save to cassandra with concatenate seq and save it when the loop is over
                         val collection = rdd.context.parallelize(Seq((item._1, item._2, sendID, destID)))
 
-                        collection.saveToCassandra(
+                        /*collection.saveToCassandra(
                             "twitter",
                             "users_communicate",
                             SomeColumns(
                                 "tweet_id",
                                 "user_send_twitter_id",
                                 "user_send_local_id",
-                                "user_dest_id"))
+                                "user_dest_id"))*/
                     }
                     }
                 }
@@ -258,7 +253,7 @@ object FinalProject {
 
                 val collection = currentContext.parallelize(Seq((item._1, item._2, item._3, item._4, item._5, newTweet)))
 
-                collection.saveToCassandra(
+                /*collection.saveToCassandra(
                     "twitter",
                     "tweet_filtered",
                     SomeColumns("tweet_id",
@@ -267,7 +262,7 @@ object FinalProject {
                         "tweet_create_at",
                         "tweet_retweet",
                         "tweet_text"
-                    ))
+                    ))*/
             }
 
             println("Tweets saved : " + rdd.count())
@@ -444,5 +439,14 @@ object FinalProject {
         val t1 = System.nanoTime()
         println("Elapsed time: " + (t1 - t0) / 1000000000.0 + " seconds")
         result
+    }
+
+    def loadGraphFromCassandra(cu: CassandraUtils, sc: SparkContext): Graph[String, String] = {
+
+        val (v, e) = { cu getAllCommunications(sc) }
+
+        // Create Graph
+        Graph(v, e)
+
     }
 }

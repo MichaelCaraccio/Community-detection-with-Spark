@@ -108,4 +108,52 @@ class CassandraUtils {
         // return
         sc.parallelize(result)
     }
+
+    def getAllCommunications(sc: SparkContext): (RDD[(VertexId, (String))], RDD[Edge[String]]) = {
+        println(color("\nCall getAllCommunications", RED))
+
+        // Collection of vertices (contains users)
+        val collectionVertices = ArrayBuffer[(Long, String)]()
+
+        var query = sc.cassandraTable("twitter", "user_filtered").select("user_local_id", "user_screen_name").toArray()
+
+        println("Query 1 ok")
+        // Save result to ArrayBuffer
+        /*if (query.collect().length != 0) {
+            collectionVertices += ((query.first().getString("user_local_id").toLong, query.first().getString("user_local_id").toString))
+        }*/
+
+        //collectionVertices.foreach(println(_))
+
+        println("Query 1 Collect ok")
+
+
+
+        // Collection of edges (contains communications between users)
+        val collectionEdge = ArrayBuffer[Edge[String]]()
+
+
+        query = sc.cassandraTable("twitter", "users_communicate").select("user_send_local_id", "user_dest_id", "tweet_id").toArray()
+
+        println("Query 2 ok")
+        // Save result to ArrayBuffer
+        /*if (query.collect().length != 0) {
+            collectionEdge += Edge(query.first().getString("user_send_local_id").toLong, query.first().getString("user_dest_id").toLong, query.first().getString("tweet_id").toString)
+        }*/
+
+        //collectionEdge.foreach(println(_))
+
+        println("Query 2 Collect ok")
+
+        // Convert vertices to RDD
+        val VerticesRDD = sc.parallelize(collectionVertices)
+
+        // Convert it to RDD
+        val EdgeRDD = sc.parallelize(collectionEdge)
+
+        println("Total vertices: " + collectionVertices.length)
+        println("Total edges: " + collectionEdge.length)
+
+        (VerticesRDD, EdgeRDD)
+    }
 }
