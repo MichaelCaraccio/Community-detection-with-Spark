@@ -16,7 +16,7 @@ import org.apache.spark.sql.{DataFrame, Strategy, SQLContext, SchemaRDD}
  *
  * LDA is not given topics, so it must infer them from raw text. LDA defines a topic as a distribution over words.
  */
-class MllibUtils(_lda: LDA, _sc: SparkContext, _dictionnary: ArrayBuffer[String], _currentTweet: ArrayBuffer[String]) {
+class MllibUtils(_lda: LDA, _sc: SparkContext, _dictionnary: ArrayBuffer[String], _currentTweet: ArrayBuffer[String]){
 
     // Text Color
     val RED = "\033[1;30m"
@@ -251,6 +251,47 @@ class MllibUtils(_lda: LDA, _sc: SparkContext, _dictionnary: ArrayBuffer[String]
 
         // Return
         (documents.toSeq, vocabArray)
+    }
+
+    def createdoc(dictionnary:ArrayBuffer[String], x:String,numStopwords:Int=0 ): ((Seq[(Long, Vector)], Array[String])) ={
+        val tokenizedCorpus: Seq[String] =
+            dictionnary.map(_.toLowerCase.split("\\s")).flatMap(_.filter(_.length > 3).filter(_.forall(java.lang.Character.isLetter))).toSeq
+
+        val tokenizedTweet: Seq[String] =
+            x.toLowerCase.split("\\s").filter(_.length > 3).filter(_.forall(java.lang.Character.isLetter))
+
+
+        // Choose the vocabulary
+        //   termCounts: Sorted list of (term, termCount) pairs
+        // http://stackoverflow.com/questions/15487413/scala-beginners-simplest-way-to-count-words-in-file
+        val termCounts = tokenizedCorpus.flatMap(_.split("\\W+")).foldLeft(Map.empty[String, Int]) {
+            (count, word) => count + (word -> (count.getOrElse(word, 0) + 1))
+        }.toArray
+
+        // vocabArray contains all distinct words
+        val vocabArray: Array[String] = termCounts.takeRight(termCounts.length - numStopwords).map(_._1)
+
+
+        // Map[String, Int] of words and theirs places in tweet
+        val vocab: Map[String, Int] = vocabArray.zipWithIndex.toMap
+        //vocab.foreach(println(_))
+
+
+        // MAP : [ Word ID , VECTOR [vocab.size, WordFrequency]]
+        val documents: Map[Long, Vector] =
+            vocab.map { case (tokens, id) =>
+                val counts = new mutable.HashMap[Int, Double]()
+
+                // Word ID
+                val idx = vocab(tokens)
+
+                // Count word occurancy
+                counts(idx) = counts.getOrElse(idx, 0.0) + tokenizedTweet.flatten.count(_ == tokens)
+
+                // Return word ID and Vector
+                (id.toLong, Vectors.sparse(vocab.size, counts.toSeq))
+            }
+        ((documents.toSeq, vocabArray))
     }
 
     /**

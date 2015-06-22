@@ -1,13 +1,11 @@
 import org.apache.log4j.{Level, Logger}
-import org.apache.spark.SparkConf
 import org.apache.spark.graphx._
 import org.apache.spark.sql.cassandra.CassandraSQLContext
 import org.apache.spark.streaming._
-import org.apache.spark.streaming.twitter.TwitterUtils
-import org.apache.spark.SparkContext
+import org.apache.spark.{SparkConf, SparkContext}
 import utils._
+import org.apache.spark.streaming.twitter.TwitterUtils
 
-import scala.collection.mutable.ArrayBuffer
 import scala.math._
 
 // Cassandra
@@ -16,13 +14,14 @@ import com.datastax.spark.connector._
 
 // Regex
 
-import scala.util.matching.Regex
 import org.apache.spark.mllib.clustering.{LDA, _}
 import org.apache.spark.mllib.linalg.{Vector, Vectors}
 import org.apache.spark.rdd.RDD
 
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
+import scala.util.matching.Regex
+
 // To make some of the examples work we will also need RDD
 
 
@@ -30,7 +29,7 @@ import scala.collection.mutable.ArrayBuffer
 // http://ampcamp.berkeley.edu/big-data-mini-course/graph-analytics-with-graphx.html
 // https://spark.apache.org/docs/latest/graphx-programming-guide.html
 
-object FinalProject{
+object FinalProject {
 
     // Terminal color
     val RED = "\033[1;30m"
@@ -38,16 +37,13 @@ object FinalProject{
 
     // Seed for murmurhash
     private val defaultSeed = 0xadc83b19L
-
-    def color(str: String, col: String): String = "%s%s%s".format(col, str, ENDC)
-
     var tweetsArray = new ArrayBuffer[Seq[String]]
-
     var dictionnary = new ArrayBuffer[String]
     var results = new ArrayBuffer[(Seq[(Long, Vector)], Array[String])]
-    var ldaModel:LDAModel = null
-    var lda:LDA = null
+    var ldaModel: LDAModel = null
+    var lda: LDA = null
 
+    def color(str: String, col: String): String = "%s%s%s".format(col, str, ENDC)
 
     def main(args: Array[String]) {
 
@@ -116,7 +112,7 @@ object FinalProject{
         val numTopics = 5
         val numIterations = 10
         val numWordsByTopics = 5
-        val numStopwords  = 0
+        val numStopwords = 0
 
         // Set LDA parameters
 
@@ -127,23 +123,7 @@ object FinalProject{
             .setMaxIterations(numIterations)
             .setOptimizer("online")
 
-
-        // LDA
-
-        // Create documents
-        /*var firstDoc = ArrayBuffer[String]()
-        firstDoc += "Concentration parameter commonly named for the prior placed"
-
-        // Init LDA
-        val mu = new MllibUtils(lda, firstDoc, firstDoc, sc.parallelize(firstDoc))
-
-
-        // Get documents and word's array
-        val (newdoc:Seq[(Long, Vector)], newvocabArray) = time { mu createDocuments(sc.parallelize(firstDoc),0) }
-
-*/
-        println("test lda")
-        //val rdd = sc.cassandraTable("twitter", "tweet_filtered").select("user_local_id","tweet_text").where("user_local_id = ?","6552782765109931845")
+        println("Init LDA")
 
         val rdd = sc.cassandraTable("twitter", "tweet_filtered2").select("tweet_text").cache()
 
@@ -151,56 +131,40 @@ object FinalProject{
         var firstDoc = ArrayBuffer[String]()
         firstDoc += "Concentration parameter commonly named for the prior placed"
         dictionnary += "Concentration distributions topics Concentration"
+
+
         // Init LDA
         val mu = new MllibUtils(lda, sc, firstDoc, firstDoc)
 
         // First tweet
-        mu newTweet("Concentration distributions topics Concentration")
+        mu newTweet ("Concentration distributions topics Concentration")
 
         // Get documents and word's array
-        val (newdoc:RDD[(Long, Vector)], newvocabArray) = time { mu createDocuments(sc, 0) }
+        val (newdoc: RDD[(Long, Vector)], newvocabArray) = time {
+            mu createDocuments(sc, 0)
+        }
 
         ldaModel = lda.run(newdoc)
 
         // Find topics
-        ldaModel = time { mu findTopics(ldaModel, newvocabArray, numWordsByTopics, true) }
+        ldaModel = time {
+            mu findTopics(ldaModel, newvocabArray, numWordsByTopics, true)
+        }
 
-        // FUUUUUUU
+
 
         // http://ochafik.com/blog/?p=806
 
 
+        println("Tweets by tweets -> Create documents and vocabulary")
+        rdd.select("tweet_text").as((i: String) => i).cache().foreach(x => {
 
-        /*for (j <- results.indices) {
-
-            //ssc.sparkContext.parallelize(doc)
-            var ldaModel:LDAModel = lda.run(ssc.sparkContext.parallelize(results.apply(j)._1))
-            ldaModel = time { mu findTopics(ldaModel, results.apply(j)._2, numWordsByTopics, true) }
-
-        }*/
-
-
-
-        /*for (cond <- rdd.select("tweet_text").as((i: String) => i).cache()){
-            println(cond)
-
-            dsds += 1
-            println(dsds.size)
-            println("---")
-            dsds.foreach(println(_))
-            println("---")
-        }*/
-
-        println("Debut du select")
-        var bla = rdd.select("tweet_text").as((i: String) => i).cache().foreach( x => {
-            //tweetsArray += Seq(x)
-            println(x.toString)
-            println(dictionnary.size)
+            println("Current tweet: "+ x.toString)
 
             dictionnary += x
 
 
-            val tokenizedCorpus: Seq[String] =
+            /*val tokenizedCorpus: Seq[String] =
                 dictionnary.map(_.toLowerCase.split("\\s")).flatMap(_.filter(_.length > 3).filter(_.forall(java.lang.Character.isLetter))).toSeq
 
             val tokenizedTweet: Seq[String] =
@@ -209,14 +173,13 @@ object FinalProject{
 
             // Choose the vocabulary
             //   termCounts: Sorted list of (term, termCount) pairs
-            //val termCounts: Array[(String, Long)] = tokenizedCorpus.flatMap(_.map(_ -> 1L)).reduceByKey(_ + _).collect().sortBy(-_._2)
             // http://stackoverflow.com/questions/15487413/scala-beginners-simplest-way-to-count-words-in-file
-            val termCounts = tokenizedCorpus.flatMap(_.split("\\W+")).foldLeft(Map.empty[String, Int]){
+            val termCounts = tokenizedCorpus.flatMap(_.split("\\W+")).foldLeft(Map.empty[String, Int]) {
                 (count, word) => count + (word -> (count.getOrElse(word, 0) + 1))
             }.toArray
 
             // vocabArray contains all distinct words
-            val vocabArray: Array[String] = termCounts.takeRight(termCounts.size - numStopwords).map(_._1)
+            val vocabArray: Array[String] = termCounts.takeRight(termCounts.length - numStopwords).map(_._1)
 
 
             // Map[String, Int] of words and theirs places in tweet
@@ -237,176 +200,20 @@ object FinalProject{
 
                     // Return word ID and Vector
                     (id.toLong, Vectors.sparse(vocab.size, counts.toSeq))
-                }
+                }*/
 
-            results += ((documents.toSeq, vocabArray))
+            results += createdoc(dictionnary, x, 0)
         })
 
-        println("FINIIIII")
+        println("LDA started")
         for (j <- results.indices) {
-            println(j)
-            //ssc.sparkContext.parallelize(doc)
             ldaModel = lda.run(ssc.sparkContext.parallelize(results.apply(j)._1))
-            ldaModel = time { mu findTopics(ldaModel, results.apply(j)._2, numWordsByTopics, true) }
-
+            ldaModel = time {
+                mu findTopics(ldaModel, results.apply(j)._2, numWordsByTopics, true)
+            }
         }
 
-        /*val tweetsArrayRDD = sc.parallelize(tweetsArray)
-
-        println("debut mogole")
-        for (mongole <- tweetsArray){
-            println(mongole)
-        }
-        println("fin mogole")*/
-
-
-
-
-       /* println("1")
-        val mywords = rdd.select("tweet_text").as((i: String) => i).flatMap(line => line.split(" "))
-        println("2")
-        var allWords = mywords.filter(w => w.length > 3).map(mywords => (mywords, 1)).reduceByKey(_ + _)
-        println("3")
-        var allMyWords = allWords.map(t => t._1)
-
-        var firstTweet = rdd.first
-        var t = firstTweet.toMap("tweet_text").toString
-
-        println(rdd.limit(1))
-
-        allMyWords.collect().foreach(println(_))
-*/
-
-        /*val csc = new CassandraSQLContext(sc)
-        println("fuuu")
-        val negro = csc.sql("SELECT COUNT(user_local_id) FROM twitter.tweet_filtered where user_local_id = 6552782765109931845").first()
-        println("negro :  "+ negro)
-        println("fuuu2")*/
-
-        //ldaModel = time { mu findTopics(ldaModel, newvocabArray, numWordsByTopics, true) }
-
-        /*val query = cc.sql("SELECT tweet_text from twitter.tweet_filtered")
-        println(query)
-        println("0")
-        println(query.map(x => x.getString(0)).cache())
-
-        //val queryCount = cc.sql("select tweet_id from twitter.tweet_filtered limit 1").first()
-        //val queryCount = cc.sql("select COUNT(*) from twitter.tweet_filtered").count().toInt
-
-        val queryCount = sc.cassandraTable("twitter", "tweet_filtered").select("tweet_id").zipWithIndex.cache()
-       //val queryCount = sc.cassandraTable[Int]("twitter", "tweet_filtered").select("tweet_id").toArray.apply(0)
-        //val queryCount = sc.cassandraTable("twitter", "tweet_filtered").select("user_local_id").where("user_local_id = 6552782765109931845")
-        //val queryCount =  sc.cassandraTable("twitter", "tweet_filtered").take(1)(0).get[Long]("tweet_id")
-
-        //mu createDocuments(sc.parallelize(firstDoc),0)
-
-        //println("post query")
-
-        //queryCount.collect()
-
-        //mu createDocuments(query,0)
-
-        println("1")
-        for (i <- query.rdd) yield myFn(a(i),i)
-
-        { var i = -1; a.map{ s => i += 1; myFn(s,i) } }
-
-        val withIndex = query.rdd.zipWithIndex() // ((a,0),(b,1),(c,2))
-        println("2")
-        val indexKey = withIndex.map{case (k,v) => (v,k)}  //((0,a),(1,b),(2,c))
-        println("3")
-
-        // http://stackoverflow.com/questions/26828815/how-to-get-element-by-index-in-spark-rdd-java
-        var a = 0
-        // for loop execution with a range
-        for( a <- 1L until query.count()){
-            //val b = indexKey.lookup(a)
-            //println(b)
-            //var ldaModel:LDAModel = lda.run(sc.parallelize(newdoc))
-        }
-
-
-
-
-        println(query)*/
-        //val q = query.rdd.mapPartitions(it => it)
-
-        //println(q)
-
-        //q.foreach(println(_))
-
-        val query2 = cc.sql("SELECT COUNT(*) from twitter.tweet_filtered").cache()
-
-        //val query3 = sc.cassandraTable[String]("twitter", "tweet_filtered").select("tweet_text").filter(_.toLong < "611183753231077376".toLong).cache()
-        println("bisspdsadas")
-        //val frequencies = query3.select("tweet_text").as((w: String) => w).toArray
-
-        //query3.collect().foreach(println(_))
-        println("bipdsadas")
-        //println(frequencies)
-        println("bip")
-        //println(query2.first().getInt(0))
-        println("bop")
-        val arrayDeRDD = new ArrayBuffer[String]
-
-        /*for(result <- query) {
-            arrayDeRDD += result.getString(0)
-        }
-
-        println("CONONONON")
-        val RDDComplete = sc.parallelize(arrayDeRDD)
-
-        RDDComplete.foreach(println(_))*/
-
-        //for(result <- query){
-
-            //var consds = sc.parallelize(result.getString(0))
-            //dede += result.getString(0)
-            //dede += time { mu createDocuments(sc, 0) }
-            //ldaModel = time { mu findTopics(lda.run(newdoc2), newvocabArray2, numWordsByTopics, true) }
-            //println("---- 7 ----")
-       // }
-
-        //mu createAllDocs query
-
-        println("---- 6dsadasdfhajkds lkahfjks df ldsaf sda ----")
-
-        /*for(fils <- dede){
-            var ldaModel= lda.run(fils._1)
-            ldaModel = time { mu findTopics(lda.run(fils._1), fils._2, numWordsByTopics, true) }
-        }
-
-        println("---- 1 ----")
-        for(edge <- graph.edges){
-            println("---- a ----")
-            //println(edge.attr)
-            //println("---- 2 ----")
-            //val tweetContent = cu getTweetContentFromID(sc, edge.attr)
-
-            //val tweetContent = queryText(new CassandraSQLContext(graph.edges.sparkContext), edge.attr)
-
-            println("---- 3 ----")
-            // New tweet
-            //mu newTweet tweetContent
-            //println("---- 4 ----")
-            /*val (newdoc2:RDD[(Long, Vector)], newvocabArray2) = time { mu createDocuments(sc, 0) }
-            println("---- 5 ----")
-            var ldaModel2 = lda.run(newdoc2)
-            println("---- 6 ----")
-            ldaModel2 = time { mu findTopics(ldaModel2, newvocabArray2, numWordsByTopics, true) }
-            println("---- 7 ----")*/
-        }
-*/
-
-
-
-
-
-
-
-
-
-        println("swag de porc")
+        println("---- Streaming started ----")
 
         // Stream about users
         val usersStream = stream.map { status => (
@@ -759,14 +566,57 @@ object FinalProject{
     def loadGraphFromCassandra(cu: CassandraUtils, sc: SparkContext): Graph[String, String] = {
 
         //val (v, e) = { cu getAllCommunications(sc) }
-        { cu getAllCommunications(sc) }
+        {
+            cu getAllCommunications (sc)
+        }
 
     }
 
-    def queryText(cc: CassandraSQLContext, id:String): String ={
+    def queryText(cc: CassandraSQLContext, id: String): String = {
         val query = cc.sql("SELECT tweet_text from twitter.tweet_filtered where tweet_id = " + id)
         //val query = sc.cassandraTable("twitter", "tweet_filtered").select("tweet_text").where("tweet_id = ?",id)
         query.first().getString(0)
+    }
+
+    def createdoc(dictionnary:ArrayBuffer[String], x:String,numStopwords:Int=0 ): ((Seq[(Long, Vector)], Array[String])) ={
+        val tokenizedCorpus: Seq[String] =
+            dictionnary.map(_.toLowerCase.split("\\s")).flatMap(_.filter(_.length > 3).filter(_.forall(java.lang.Character.isLetter))).toSeq
+
+        val tokenizedTweet: Seq[String] =
+            x.toLowerCase.split("\\s").filter(_.length > 3).filter(_.forall(java.lang.Character.isLetter))
+
+
+        // Choose the vocabulary
+        //   termCounts: Sorted list of (term, termCount) pairs
+        // http://stackoverflow.com/questions/15487413/scala-beginners-simplest-way-to-count-words-in-file
+        val termCounts = tokenizedCorpus.flatMap(_.split("\\W+")).foldLeft(Map.empty[String, Int]) {
+            (count, word) => count + (word -> (count.getOrElse(word, 0) + 1))
+        }.toArray
+
+        // vocabArray contains all distinct words
+        val vocabArray: Array[String] = termCounts.takeRight(termCounts.length - numStopwords).map(_._1)
+
+
+        // Map[String, Int] of words and theirs places in tweet
+        val vocab: Map[String, Int] = vocabArray.zipWithIndex.toMap
+        //vocab.foreach(println(_))
+
+
+        // MAP : [ Word ID , VECTOR [vocab.size, WordFrequency]]
+        val documents: Map[Long, Vector] =
+            vocab.map { case (tokens, id) =>
+                val counts = new mutable.HashMap[Int, Double]()
+
+                // Word ID
+                val idx = vocab(tokens)
+
+                // Count word occurancy
+                counts(idx) = counts.getOrElse(idx, 0.0) + tokenizedTweet.flatten.count(_ == tokens)
+
+                // Return word ID and Vector
+                (id.toLong, Vectors.sparse(vocab.size, counts.toSeq))
+            }
+        ((documents.toSeq, vocabArray))
     }
 
 
