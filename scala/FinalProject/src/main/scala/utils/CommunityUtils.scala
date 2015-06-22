@@ -7,6 +7,9 @@ import org.apache.spark.rdd.RDD
 import scala.collection.mutable.ArrayBuffer
 import scala.math._
 import scala.reflect.ClassTag
+import org.apache.spark.storage.StorageLevel
+import org.apache.spark.util.Utils
+import org.apache.spark.graphx.PartitionStrategy._
 
 class CommunityUtils extends Logging with Serializable {
 
@@ -107,11 +110,11 @@ class CommunityUtils extends Logging with Serializable {
 
         println(color("\nCall KCoreDecomposition", RED))
 
+
         g = computeCurrentKCore(g, kmin).cache()
         val testK = kmin
         val vCount = g.vertices.filter { case (vid, vd) => vd >= kmin }.count()
         val eCount = g.triplets.map { t => t.srcAttr >= testK && t.dstAttr >= testK }.count()
-
         val v = g.vertices.filter { case (vid, vd) => vd >= kmin }
 
         // Display informations
@@ -139,7 +142,7 @@ class CommunityUtils extends Logging with Serializable {
     }
 
     def computeCurrentKCore[ED: ClassTag](graph: Graph[Int, ED], k: Int) = {
-        //logWarning(s"Computing kcore for k=$k")
+        println("Computing kcore for k="+k)
         def sendMsg(et: EdgeTriplet[Int, ED]): Iterator[(VertexId, Int)] = {
             if (et.srcAttr < 0 || et.dstAttr < 0) {
                 // if either vertex has already been turned off we do nothing
@@ -182,6 +185,7 @@ class CommunityUtils extends Logging with Serializable {
             }
         }
 
+        println("avant pregel")
         // Note that initial message should have no effect
         Pregel(graph, 0)(vProg, sendMsg, mergeMsg)
     }
