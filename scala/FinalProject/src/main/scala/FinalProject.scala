@@ -137,7 +137,7 @@ object FinalProject {
         val mu = new MllibUtils(lda, sc, firstDoc, firstDoc)
 
         // First tweet
-        mu newTweet ("Concentration distributions topics Concentration")
+        mu newTweet "Concentration distributions topics Concentration"
 
         // Get documents and word's array
         val (newdoc: RDD[(Long, Vector)], newvocabArray) = time {
@@ -162,45 +162,6 @@ object FinalProject {
             println("Current tweet: "+ x.toString)
 
             dictionnary += x
-
-
-            /*val tokenizedCorpus: Seq[String] =
-                dictionnary.map(_.toLowerCase.split("\\s")).flatMap(_.filter(_.length > 3).filter(_.forall(java.lang.Character.isLetter))).toSeq
-
-            val tokenizedTweet: Seq[String] =
-                x.toLowerCase.split("\\s").filter(_.length > 3).filter(_.forall(java.lang.Character.isLetter))
-
-
-            // Choose the vocabulary
-            //   termCounts: Sorted list of (term, termCount) pairs
-            // http://stackoverflow.com/questions/15487413/scala-beginners-simplest-way-to-count-words-in-file
-            val termCounts = tokenizedCorpus.flatMap(_.split("\\W+")).foldLeft(Map.empty[String, Int]) {
-                (count, word) => count + (word -> (count.getOrElse(word, 0) + 1))
-            }.toArray
-
-            // vocabArray contains all distinct words
-            val vocabArray: Array[String] = termCounts.takeRight(termCounts.length - numStopwords).map(_._1)
-
-
-            // Map[String, Int] of words and theirs places in tweet
-            val vocab: Map[String, Int] = vocabArray.zipWithIndex.toMap
-            //vocab.foreach(println(_))
-
-
-            // MAP : [ Word ID , VECTOR [vocab.size, WordFrequency]]
-            val documents: Map[Long, Vector] =
-                vocab.map { case (tokens, id) =>
-                    val counts = new mutable.HashMap[Int, Double]()
-
-                    // Word ID
-                    val idx = vocab(tokens)
-
-                    // Count word occurancy
-                    counts(idx) = counts.getOrElse(idx, 0.0) + tokenizedTweet.flatten.count(_ == tokens)
-
-                    // Return word ID and Vector
-                    (id.toLong, Vectors.sparse(vocab.size, counts.toSeq))
-                }*/
 
             results += createdoc(dictionnary, x, 0)
         })
@@ -567,7 +528,7 @@ object FinalProject {
 
         //val (v, e) = { cu getAllCommunications(sc) }
         {
-            cu getAllCommunications (sc)
+            cu getAllCommunications sc
         }
 
     }
@@ -616,8 +577,6 @@ object FinalProject {
                 // Return word ID and Vector
                 (id.toLong, Vectors.sparse(vocab.size, counts.toSeq))
             }
-        ((documents.toSeq, vocabArray))
+        (documents.toSeq, vocabArray)
     }
-
-
 }
