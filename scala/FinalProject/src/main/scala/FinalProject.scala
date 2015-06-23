@@ -160,7 +160,7 @@ object FinalProject {
         println("Tweets by tweets -> Create documents and vocabulary")
         rdd.select("tweet_text").as((i: String) => i).cache().foreach(x => {
 
-            println("Current tweet: "+ x.toString)
+            println("Current tweet: " + x.toString)
 
             dictionnary += x
 
@@ -175,43 +175,7 @@ object FinalProject {
                 mu findTopics(ldaModel, results.apply(j)._2, numWordsByTopics, true)
             }
 
-            //println("-----------------------------------")
-            /*results.apply(j)._1.map { case (tokens, id) =>
-                val counts = new mutable.HashMap[Int, Double]()
-                val idx = results.apply(j)._1(tokens.toInt)
-
-                println("tokens: " + tokens)
-                println("counts: " + counts)
-                println("id: " + id)
-                println("idx: " + idx)
-            }*/
-            //println("dsdsddsdsdsdssdsdsdsdssdsdsdsdssdsdsdsdssdsdsdsdssdsdsdsdsssdss")
-            //vocab.foreach(println(_))
-
-            //println("----")
-            //results.apply(j)._1.foreach(println(_))
-            //results.apply(j)._2.foreach(println(_))
-
-            val tabold = results.apply(j)._2.zipWithIndex.map {
-                case (k, v) => (k, (v + 1) -1)
-            }
-            //tabold.foreach(println(_))
-            /*if(vocab.contains("funky")){
-                println("weesh")
-                println(vocab.getOrElse("funky",-1).toString)
-            }
-            if(vocab.contains("ddsdadadasd")){
-                println("pas bien")
-            }*/
-
-
-            //println("dsdsddsdsdsdssdsdsdsdssdsdsdsdssdsdsdsdssdsdsdsdssdsdsdsdsssdss")
-            //results.apply(j)._1.foreach(println(_))
-
-
             var tab1 = new ArrayBuffer[Double]
-            //var tabtopics = new ArrayBuffer[Array[String]]
-
             var tab2 = new ArrayBuffer[Double]
 
             var tabcosine = new ArrayBuffer[Double]
@@ -219,67 +183,29 @@ object FinalProject {
 
             val topicIndices = ldaModel.describeTopics()
             topicIndices.foreach { case (terms, termWeights) =>
-                println("TOPICS:")
-                //val Array = new ArrayBuffer[String]
                 terms.zip(termWeights).foreach { case (term, weight) =>
-                    //Array += term
-                    //println(s"${results.apply(j)._2(term.toInt)}\t\t${vocab.getOrElse(results.apply(j)._2(term.toInt),-1).toString}\t\t$term \t\t$weight")
-                    //val key = results.apply(j)._1.filter(x => x._1 == term).map{ case(id, vec) => vec}
-
-                    //results.apply(j)._1.foreach(println(_))
-                    /*if (key.isEmpty){
-                        println("cest vide pelo")
-                    }
-                    else{*/
-                        //println(key.head.apply(vocab.getOrElse(results.apply(j)._2(term.toInt),-1)))
-                        //println(key.head.apply(term))
-                        tab1 += results.apply(j)._1.filter(x => x._1 == term).head._2.apply(term);
-                        tab2 += weight
-                        //val vec:Vector = key.head
-
-                        /*for (v <- vec.toArray){
-                            println(v)
-                        }*/
-                        /*println(key.head)
-                        println(vec)
-                        println(vec.apply(0))
-                        println(vec(2))
-                        println(key.head.toArray.tail(0))
-                        println(key.head.toArray.tail(1))
-                        println(key.head.toArray.tail(2))
-                        println(key.head.toArray(2))*/
-
-                    //}
-
-                    //    println(vocab.getOrElse(results.apply(j)._2(term.toInt),-1).toString)
-                    //if(vocab.getOrElse(results.apply(j)._2(term.toInt),-1).toString == )
-                    //val debile=results.apply(j)._1()._2.apply(0).toString
-                   // println(debile)
-                    // word
-
-
-
+                    tab1 += results.apply(j)._1.filter(x => x._1 == term).head._2.apply(term)
+                    tab2 += weight
                 }
 
-                println(cosineSimilarity(tab1, tab2))
+                //println("cosine for each topics")
+                //println(cosineSimilarity(tab1, tab2))
 
-
+                // Store every cosine similarity
                 tabcosine += cosineSimilarity(tab1, tab2)
 
-
+                // Reset array
                 tab1 = new ArrayBuffer[Double]
                 tab2 = new ArrayBuffer[Double]
-
-                println()
             }
 
-            val biggestCosineIndex:Int = tabcosine.indexOf(tabcosine.max)
+            val biggestCosineIndex: Int = tabcosine.indexOf(tabcosine.max)
             println("Most similarity found with this topic: " + tabcosine(biggestCosineIndex))
             println("Topic words : ")
 
-            ldaModel.describeTopics(5).apply(biggestCosineIndex)._1.foreach{ x =>
+            ldaModel.describeTopics(5).apply(biggestCosineIndex)._1.foreach { x =>
                 println(results.apply(j)._2(x))
-                }
+            }
 
             tabcosine = new ArrayBuffer[Double]
 
@@ -647,13 +573,7 @@ object FinalProject {
 
     }
 
-    def queryText(cc: CassandraSQLContext, id: String): String = {
-        val query = cc.sql("SELECT tweet_text from twitter.tweet_filtered where tweet_id = " + id)
-        //val query = sc.cassandraTable("twitter", "tweet_filtered").select("tweet_text").where("tweet_id = ?",id)
-        query.first().getString(0)
-    }
-
-    def createdoc(dictionnary:ArrayBuffer[String], x:String,numStopwords:Int=0 ): ((Seq[(Long, Vector)], Array[String])) ={
+    def createdoc(dictionnary: ArrayBuffer[String], x: String, numStopwords: Int = 0): ((Seq[(Long, Vector)], Array[String])) = {
         val tokenizedCorpus: Seq[String] =
             dictionnary.reverse.map(_.toLowerCase.split("\\s")).flatMap(_.filter(_.length > 3).filter(_.forall(java.lang.Character.isLetter))).toSeq
 
@@ -707,7 +627,7 @@ object FinalProject {
    */
     def cosineSimilarity(x: ArrayBuffer[Double], y: ArrayBuffer[Double]): Double = {
         require(x.length == y.length)
-        dotProduct(x, y)/(magnitude(x) * magnitude(y))
+        dotProduct(x, y) / (magnitude(x) * magnitude(y))
     }
 
     /*
@@ -715,7 +635,7 @@ object FinalProject {
      * e.g. (a[0]*b[0])+(a[1]*a[2])
      */
     def dotProduct(x: ArrayBuffer[Double], y: ArrayBuffer[Double]): Double = {
-        (for((a, b) <- x zip y) yield a * b) sum
+        (for ((a, b) <- x zip y) yield a * b) sum
     }
 
     /*
@@ -723,7 +643,13 @@ object FinalProject {
      * We multiply each element, sum it, then square root the result.
      */
     def magnitude(x: ArrayBuffer[Double]): Double = {
-        math.sqrt(x map(i => i*i) sum)
+        math.sqrt(x map (i => i * i) sum)
+    }
+
+    def queryText(cc: CassandraSQLContext, id: String): String = {
+        val query = cc.sql("SELECT tweet_text from twitter.tweet_filtered where tweet_id = " + id)
+        //val query = sc.cassandraTable("twitter", "tweet_filtered").select("tweet_text").where("tweet_id = ?",id)
+        query.first().getString(0)
     }
 
 }
