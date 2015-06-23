@@ -131,14 +131,14 @@ object FinalProject {
         // Create documents
         var firstDoc = ArrayBuffer[String]()
         firstDoc += "Concentration parameter commonly named for the prior placed"
-        dictionnary += "Concentration distributions topics Concentration"
-
+        dictionnary += "Concentration parameter commonly named for the prior placed"
 
         // Init LDA
         val mu = new MllibUtils(lda, sc, firstDoc, firstDoc)
 
         // First tweet
         mu newTweet "Concentration distributions topics Concentration"
+        dictionnary += "Concentration distributions topics Concentration"
 
         // Get documents and word's array
         val (newdoc: RDD[(Long, Vector)], newvocabArray) = time {
@@ -185,31 +185,43 @@ object FinalProject {
                 println("idx: " + idx)
             }*/
             println("dsdsddsdsdsdssdsdsdsdssdsdsdsdssdsdsdsdssdsdsdsdssdsdsdsdsssdss")
-            /*vocab.foreach(println(_))
-            if(vocab.contains("funky")){
+            vocab.foreach(println(_))
+
+            println("----")
+            results.apply(j)._1.foreach(println(_))
+            results.apply(j)._2.foreach(println(_))
+
+            val tabold = results.apply(j)._2.zipWithIndex.map {
+                case (k, v) => (k, (v + 1) -1)
+            }
+            tabold.foreach(println(_))
+            /*if(vocab.contains("funky")){
                 println("weesh")
                 println(vocab.getOrElse("funky",-1).toString)
             }
             if(vocab.contains("ddsdadadasd")){
                 println("pas bien")
             }*/
+
+
             println("dsdsddsdsdsdssdsdsdsdssdsdsdsdssdsdsdsdssdsdsdsdssdsdsdsdsssdss")
             //results.apply(j)._1.foreach(println(_))
             val topicIndices = ldaModel.describeTopics()
             topicIndices.foreach { case (terms, termWeights) =>
                 println("TOPICS:")
                 terms.zip(termWeights).foreach { case (term, weight) =>
-                    println(s"${results.apply(j)._2(term.toInt)}\t\t${vocab.getOrElse(results.apply(j)._2(term.toInt),-1).toString} \t\t$weight")
-                    val key = results.apply(j)._1.filter(x => x._1 == vocab.getOrElse(results.apply(j)._2(term.toInt),-1).toLong).map{ case(id, vec) => vec}
-//.map{ case(id, vec) => vec.toArray.lift(2)}
+                    println(s"${results.apply(j)._2(term.toInt)}\t\t${vocab.getOrElse(results.apply(j)._2(term.toInt),-1).toString}\t\t$term \t\t$weight")
+                    val key = results.apply(j)._1.filter(x => x._1 == term).map{ case(id, vec) => vec}
 
                     //results.apply(j)._1.foreach(println(_))
                     if (key.isEmpty){
                         println("cest vide pelo")
                     }
                     else{
-                        println(key.head.apply(vocab.getOrElse(results.apply(j)._2(term.toInt),-1)))
-                        val vec:Vector = key.head
+                        //println(key.head.apply(vocab.getOrElse(results.apply(j)._2(term.toInt),-1)))
+                        println(key.head.apply(term))
+                        println(results.apply(j)._1.filter(x => x._1 == term).head._2.apply(term))
+                        //val vec:Vector = key.head
 
                         /*for (v <- vec.toArray){
                             println(v)
@@ -608,7 +620,7 @@ object FinalProject {
 
     def createdoc(dictionnary:ArrayBuffer[String], x:String,numStopwords:Int=0 ): ((Seq[(Long, Vector)], Array[String])) ={
         val tokenizedCorpus: Seq[String] =
-            dictionnary.map(_.toLowerCase.split("\\s")).flatMap(_.filter(_.length > 3).filter(_.forall(java.lang.Character.isLetter))).toSeq
+            dictionnary.reverse.map(_.toLowerCase.split("\\s")).flatMap(_.filter(_.length > 3).filter(_.forall(java.lang.Character.isLetter))).toSeq
 
         val tokenizedTweet: Seq[String] =
             x.toLowerCase.split("\\s").filter(_.length > 3).filter(_.forall(java.lang.Character.isLetter))
@@ -629,6 +641,7 @@ object FinalProject {
         vocab = vocabArray.zipWithIndex.toMap
         //vocab.foreach(println(_))
 
+        vocab.foreach(println(_))
 
         // MAP : [ Word ID , VECTOR [vocab.size, WordFrequency]]
         val documents: Map[Long, Vector] =
