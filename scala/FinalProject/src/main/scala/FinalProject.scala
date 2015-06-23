@@ -169,12 +169,13 @@ object FinalProject {
 
         println("LDA started")
         for (j <- results.indices) {
+            println("Current tweet : " + dictionnary(j))
             ldaModel = lda.run(ssc.sparkContext.parallelize(results.apply(j)._1))
             ldaModel = time {
                 mu findTopics(ldaModel, results.apply(j)._2, numWordsByTopics, true)
             }
 
-            println("-----------------------------------")
+            //println("-----------------------------------")
             /*results.apply(j)._1.map { case (tokens, id) =>
                 val counts = new mutable.HashMap[Int, Double]()
                 val idx = results.apply(j)._1(tokens.toInt)
@@ -184,17 +185,17 @@ object FinalProject {
                 println("id: " + id)
                 println("idx: " + idx)
             }*/
-            println("dsdsddsdsdsdssdsdsdsdssdsdsdsdssdsdsdsdssdsdsdsdssdsdsdsdsssdss")
-            vocab.foreach(println(_))
+            //println("dsdsddsdsdsdssdsdsdsdssdsdsdsdssdsdsdsdssdsdsdsdssdsdsdsdsssdss")
+            //vocab.foreach(println(_))
 
-            println("----")
-            results.apply(j)._1.foreach(println(_))
-            results.apply(j)._2.foreach(println(_))
+            //println("----")
+            //results.apply(j)._1.foreach(println(_))
+            //results.apply(j)._2.foreach(println(_))
 
             val tabold = results.apply(j)._2.zipWithIndex.map {
                 case (k, v) => (k, (v + 1) -1)
             }
-            tabold.foreach(println(_))
+            //tabold.foreach(println(_))
             /*if(vocab.contains("funky")){
                 println("weesh")
                 println(vocab.getOrElse("funky",-1).toString)
@@ -204,23 +205,36 @@ object FinalProject {
             }*/
 
 
-            println("dsdsddsdsdsdssdsdsdsdssdsdsdsdssdsdsdsdssdsdsdsdssdsdsdsdsssdss")
+            //println("dsdsddsdsdsdssdsdsdsdssdsdsdsdssdsdsdsdssdsdsdsdssdsdsdsdsssdss")
             //results.apply(j)._1.foreach(println(_))
+
+
+            var tab1 = new ArrayBuffer[Double]
+            //var tabtopics = new ArrayBuffer[Array[String]]
+
+            var tab2 = new ArrayBuffer[Double]
+
+            var tabcosine = new ArrayBuffer[Double]
+
+
             val topicIndices = ldaModel.describeTopics()
             topicIndices.foreach { case (terms, termWeights) =>
                 println("TOPICS:")
+                //val Array = new ArrayBuffer[String]
                 terms.zip(termWeights).foreach { case (term, weight) =>
-                    println(s"${results.apply(j)._2(term.toInt)}\t\t${vocab.getOrElse(results.apply(j)._2(term.toInt),-1).toString}\t\t$term \t\t$weight")
-                    val key = results.apply(j)._1.filter(x => x._1 == term).map{ case(id, vec) => vec}
+                    //Array += term
+                    //println(s"${results.apply(j)._2(term.toInt)}\t\t${vocab.getOrElse(results.apply(j)._2(term.toInt),-1).toString}\t\t$term \t\t$weight")
+                    //val key = results.apply(j)._1.filter(x => x._1 == term).map{ case(id, vec) => vec}
 
                     //results.apply(j)._1.foreach(println(_))
-                    if (key.isEmpty){
+                    /*if (key.isEmpty){
                         println("cest vide pelo")
                     }
-                    else{
+                    else{*/
                         //println(key.head.apply(vocab.getOrElse(results.apply(j)._2(term.toInt),-1)))
-                        println(key.head.apply(term))
-                        println(results.apply(j)._1.filter(x => x._1 == term).head._2.apply(term))
+                        //println(key.head.apply(term))
+                        tab1 += results.apply(j)._1.filter(x => x._1 == term).head._2.apply(term);
+                        tab2 += weight
                         //val vec:Vector = key.head
 
                         /*for (v <- vec.toArray){
@@ -235,7 +249,7 @@ object FinalProject {
                         println(key.head.toArray.tail(2))
                         println(key.head.toArray(2))*/
 
-                    }
+                    //}
 
                     //    println(vocab.getOrElse(results.apply(j)._2(term.toInt),-1).toString)
                     //if(vocab.getOrElse(results.apply(j)._2(term.toInt),-1).toString == )
@@ -246,8 +260,29 @@ object FinalProject {
 
 
                 }
+
+                println(cosineSimilarity(tab1, tab2))
+
+
+                tabcosine += cosineSimilarity(tab1, tab2)
+
+
+                tab1 = new ArrayBuffer[Double]
+                tab2 = new ArrayBuffer[Double]
+
                 println()
             }
+
+            val biggestCosineIndex:Int = tabcosine.indexOf(tabcosine.max)
+            println("Most similarity found with this topic: " + tabcosine(biggestCosineIndex))
+            println("Topic words : ")
+
+            ldaModel.describeTopics(5).apply(biggestCosineIndex)._1.foreach{ x =>
+                println(results.apply(j)._2(x))
+                }
+
+            tabcosine = new ArrayBuffer[Double]
+
             println("-----------------------------------")
 
 
@@ -670,8 +705,8 @@ object FinalProject {
    * 0.9925 would be 99.25% similar
    * (x dot y)/||X|| ||Y||
    */
-    def cosineSimilarity(x: Array[Int], y: Array[Int]): Double = {
-        require(x.size == y.size)
+    def cosineSimilarity(x: ArrayBuffer[Double], y: ArrayBuffer[Double]): Double = {
+        require(x.length == y.length)
         dotProduct(x, y)/(magnitude(x) * magnitude(y))
     }
 
@@ -679,7 +714,7 @@ object FinalProject {
      * Return the dot product of the 2 arrays
      * e.g. (a[0]*b[0])+(a[1]*a[2])
      */
-    def dotProduct(x: Array[Int], y: Array[Int]): Int = {
+    def dotProduct(x: ArrayBuffer[Double], y: ArrayBuffer[Double]): Double = {
         (for((a, b) <- x zip y) yield a * b) sum
     }
 
@@ -687,7 +722,7 @@ object FinalProject {
      * Return the magnitude of an array
      * We multiply each element, sum it, then square root the result.
      */
-    def magnitude(x: Array[Int]): Double = {
+    def magnitude(x: ArrayBuffer[Double]): Double = {
         math.sqrt(x map(i => i*i) sum)
     }
 
