@@ -42,6 +42,7 @@ object FinalProject {
     var results = new ArrayBuffer[(Seq[(Long, Vector)], Array[String])]
     var ldaModel: LDAModel = null
     var lda: LDA = null
+    var vocab: Map[String, Int] = null
 
     def color(str: String, col: String): String = "%s%s%s".format(col, str, ENDC)
 
@@ -172,6 +173,72 @@ object FinalProject {
             ldaModel = time {
                 mu findTopics(ldaModel, results.apply(j)._2, numWordsByTopics, true)
             }
+
+            println("-----------------------------------")
+            /*results.apply(j)._1.map { case (tokens, id) =>
+                val counts = new mutable.HashMap[Int, Double]()
+                val idx = results.apply(j)._1(tokens.toInt)
+
+                println("tokens: " + tokens)
+                println("counts: " + counts)
+                println("id: " + id)
+                println("idx: " + idx)
+            }*/
+            println("dsdsddsdsdsdssdsdsdsdssdsdsdsdssdsdsdsdssdsdsdsdssdsdsdsdsssdss")
+            /*vocab.foreach(println(_))
+            if(vocab.contains("funky")){
+                println("weesh")
+                println(vocab.getOrElse("funky",-1).toString)
+            }
+            if(vocab.contains("ddsdadadasd")){
+                println("pas bien")
+            }*/
+            println("dsdsddsdsdsdssdsdsdsdssdsdsdsdssdsdsdsdssdsdsdsdssdsdsdsdsssdss")
+            //results.apply(j)._1.foreach(println(_))
+            val topicIndices = ldaModel.describeTopics()
+            topicIndices.foreach { case (terms, termWeights) =>
+                println("TOPICS:")
+                terms.zip(termWeights).foreach { case (term, weight) =>
+                    println(s"${results.apply(j)._2(term.toInt)}\t\t${vocab.getOrElse(results.apply(j)._2(term.toInt),-1).toString} \t\t$weight")
+                    val key = results.apply(j)._1.filter(x => x._1 == vocab.getOrElse(results.apply(j)._2(term.toInt),-1).toLong).map{ case(id, vec) => vec}
+//.map{ case(id, vec) => vec.toArray.lift(2)}
+
+                    //results.apply(j)._1.foreach(println(_))
+                    if (key.isEmpty){
+                        println("cest vide pelo")
+                    }
+                    else{
+                        println(key.head.apply(vocab.getOrElse(results.apply(j)._2(term.toInt),-1)))
+                        val vec:Vector = key.head
+
+                        /*for (v <- vec.toArray){
+                            println(v)
+                        }*/
+                        /*println(key.head)
+                        println(vec)
+                        println(vec.apply(0))
+                        println(vec(2))
+                        println(key.head.toArray.tail(0))
+                        println(key.head.toArray.tail(1))
+                        println(key.head.toArray.tail(2))
+                        println(key.head.toArray(2))*/
+
+                    }
+
+                    //    println(vocab.getOrElse(results.apply(j)._2(term.toInt),-1).toString)
+                    //if(vocab.getOrElse(results.apply(j)._2(term.toInt),-1).toString == )
+                    //val debile=results.apply(j)._1()._2.apply(0).toString
+                   // println(debile)
+                    // word
+
+
+
+                }
+                println()
+            }
+            println("-----------------------------------")
+
+
         }
 
         println("---- Streaming started ----")
@@ -548,7 +615,7 @@ object FinalProject {
 
 
         // Choose the vocabulary
-        //   termCounts: Sorted list of (term, termCount) pairs
+        // termCounts: Sorted list of (term, termCount) pairs
         // http://stackoverflow.com/questions/15487413/scala-beginners-simplest-way-to-count-words-in-file
         val termCounts = tokenizedCorpus.flatMap(_.split("\\W+")).foldLeft(Map.empty[String, Int]) {
             (count, word) => count + (word -> (count.getOrElse(word, 0) + 1))
@@ -559,7 +626,7 @@ object FinalProject {
 
 
         // Map[String, Int] of words and theirs places in tweet
-        val vocab: Map[String, Int] = vocabArray.zipWithIndex.toMap
+        vocab = vocabArray.zipWithIndex.toMap
         //vocab.foreach(println(_))
 
 
@@ -572,11 +639,43 @@ object FinalProject {
                 val idx = vocab(tokens)
 
                 // Count word occurancy
-                counts(idx) = counts.getOrElse(idx, 0.0) + tokenizedTweet.flatten.count(_ == tokens)
+                counts(idx) = counts.getOrElse(idx, 0.0) + tokenizedTweet.count(_ == tokens)
 
                 // Return word ID and Vector
                 (id.toLong, Vectors.sparse(vocab.size, counts.toSeq))
             }
+
+        documents.foreach(println(_))
+
+
         (documents.toSeq, vocabArray)
     }
+
+    /*
+   * This method takes 2 equal length arrays of integers
+   * It returns a double representing similarity of the 2 arrays
+   * 0.9925 would be 99.25% similar
+   * (x dot y)/||X|| ||Y||
+   */
+    def cosineSimilarity(x: Array[Int], y: Array[Int]): Double = {
+        require(x.size == y.size)
+        dotProduct(x, y)/(magnitude(x) * magnitude(y))
+    }
+
+    /*
+     * Return the dot product of the 2 arrays
+     * e.g. (a[0]*b[0])+(a[1]*a[2])
+     */
+    def dotProduct(x: Array[Int], y: Array[Int]): Int = {
+        (for((a, b) <- x zip y) yield a * b) sum
+    }
+
+    /*
+     * Return the magnitude of an array
+     * We multiply each element, sum it, then square root the result.
+     */
+    def magnitude(x: Array[Int]): Double = {
+        math.sqrt(x map(i => i*i) sum)
+    }
+
 }

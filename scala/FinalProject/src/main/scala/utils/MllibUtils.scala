@@ -134,7 +134,7 @@ class MllibUtils(_lda: LDA, _sc: SparkContext, _dictionnary: ArrayBuffer[String]
         val documentsRDD = sc.parallelize(documents.toSeq)
 
         // Display RDD
-        //documentsRDD.collect().foreach(println(_))
+        documentsRDD.collect().foreach(println(_))
 
         // Return
         (documentsRDD, vocabArray)
