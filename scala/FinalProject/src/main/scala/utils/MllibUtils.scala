@@ -16,18 +16,17 @@ import org.apache.spark.sql.{DataFrame, Strategy, SQLContext, SchemaRDD}
  *
  * LDA is not given topics, so it must infer them from raw text. LDA defines a topic as a distribution over words.
  */
-class MllibUtils(_lda: LDA, _sc: SparkContext, _dictionnary: ArrayBuffer[String], _currentTweet: ArrayBuffer[String]){
+class MllibUtils(/*_dictionnary: ArrayBuffer[String], _currentTweet: ArrayBuffer[String])*/){
 
     // Text Color
     val RED = "\033[1;30m"
     val ENDC = "\033[0m"
 
     // LDA attributs
-    var lda: LDA = _lda
-    var dictionnary: ArrayBuffer[String] = _dictionnary
-    var currentTweet: ArrayBuffer[String] = _currentTweet
-    var currentTweetRDD: RDD[String] = _sc.parallelize(_dictionnary)
-    var sc: SparkContext = _sc
+    //var dictionnary: ArrayBuffer[String] = _dictionnary
+    //var currentTweet: ArrayBuffer[String] = _currentTweet
+    //var currentTweetRDD: RDD[String] = _sc.parallelize(_dictionnary)
+    //var sc: SparkContext = _sc
 
     /**
      * @constructor newTweet
@@ -41,35 +40,35 @@ class MllibUtils(_lda: LDA, _sc: SparkContext, _dictionnary: ArrayBuffer[String]
     def newTweet(newTweet: String, newTweetRDD: RDD[String]): Unit = {
 
         // Delete old currentTweet
-        currentTweet = new ArrayBuffer[String]()
+        //currentTweet = new ArrayBuffer[String]()
 
         // Set new value
-        currentTweet += newTweet
+        //currentTweet += newTweet
 
         // Convert it to RDD
-        currentTweetRDD = newTweetRDD
+        //currentTweetRDD = newTweetRDD
 
         // Add tweet to dictionnary
-        addToDictionnary(newTweet)
+        //addToDictionnary(newTweet)
 
-        currentTweetRDD.collect().foreach(println(_))
+        //currentTweetRDD.collect().foreach(println(_))
     }
 
     def newTweet(newTweet: String): Unit = {
 
         // Delete old currentTweet
-        currentTweet = new ArrayBuffer[String]()
+        //currentTweet = new ArrayBuffer[String]()
 
         // Set new value
-        currentTweet += newTweet
+        //currentTweet += newTweet
 
         // Convert it to RDD
-        currentTweetRDD = sc.parallelize(currentTweet)
+        //currentTweetRDD = sc.parallelize(currentTweet)
 
         // Add tweet to dictionnary
-        addToDictionnary(newTweet)
+        //addToDictionnary(newTweet)
 
-        currentTweetRDD.collect().foreach(println(_))
+        //currentTweetRDD.collect().foreach(println(_))
     }
 
     /**
@@ -82,7 +81,7 @@ class MllibUtils(_lda: LDA, _sc: SparkContext, _dictionnary: ArrayBuffer[String]
      *
      * @return RDD[(Long, Vector)] and Array[String] : documentsRDD and array of vocabulary
      */
-    def createDocuments(sc: SparkContext, numStopwords: Int): (RDD[(Long, Vector)], Array[String]) = {
+    /*def createDocuments(sc: SparkContext, numStopwords: Int): (RDD[(Long, Vector)], Array[String]) = {
 
         println(color("\nCall createDocuments", RED))
 
@@ -138,7 +137,7 @@ class MllibUtils(_lda: LDA, _sc: SparkContext, _dictionnary: ArrayBuffer[String]
 
         // Return
         (documentsRDD, vocabArray)
-    }
+    }*/
 
     /**
      * @constructor addToDictionnary
@@ -149,9 +148,9 @@ class MllibUtils(_lda: LDA, _sc: SparkContext, _dictionnary: ArrayBuffer[String]
      *
      * @return Unit
      */
-    def addToDictionnary(newTweet: String): Unit = {
+    /*def addToDictionnary(newTweet: String): Unit = {
         dictionnary += newTweet
-    }
+    }*/
 
     /**
      * @constructor findTopics
@@ -195,7 +194,7 @@ class MllibUtils(_lda: LDA, _sc: SparkContext, _dictionnary: ArrayBuffer[String]
      *
      * @return RDD[(Long, Vector)] and Array[String] : documentsRDD and array of vocabulary
      */
-    def createDocuments(corpus: RDD[String], numStopwords: Int): (Seq[(Long, Vector)], Array[String]) = {
+    /*def createDocuments(corpus: RDD[String], numStopwords: Int): (Seq[(Long, Vector)], Array[String]) = {
 
         println(color("\nCall createDocuments", RED))
 
@@ -251,7 +250,7 @@ class MllibUtils(_lda: LDA, _sc: SparkContext, _dictionnary: ArrayBuffer[String]
 
         // Return
         (documents.toSeq, vocabArray)
-    }
+    }*/
 
 
     /**
@@ -328,9 +327,9 @@ class MllibUtils(_lda: LDA, _sc: SparkContext, _dictionnary: ArrayBuffer[String]
 
     def color(str: String, col: String): String = "%s%s%s".format(col, str, ENDC)
 
-    def getDictionnary: ArrayBuffer[String] ={
+    /*def getDictionnary: ArrayBuffer[String] ={
         dictionnary
-    }
+    }*/
 
    /* def createAllDocs(con:DataFrame): Unit ={
         println("suce")

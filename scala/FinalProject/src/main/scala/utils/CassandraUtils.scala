@@ -1,10 +1,6 @@
 package utils
 
-import scala.collection.mutable.{ArrayBuffer, ListBuffer}
-import org.apache.spark.storage.StorageLevel
-import org.apache.spark.sql.catalyst.analysis.OverrideCatalog
-import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
-import org.apache.spark.sql.{DataFrame, Strategy, SQLContext, SchemaRDD}
+import scala.collection.mutable.ArrayBuffer
 
 // Enable Cassandra-specific functions on the StreamingContext, DStream and RDD:
 
@@ -17,8 +13,8 @@ import org.apache.spark.graphx._
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.cassandra.CassandraSQLContext
 
-@SerialVersionUID(100L)
-class CassandraUtils extends Serializable{
+//@SerialVersionUID(100L)
+class CassandraUtils /*extends Serializable*/ {
 
     val RED = "\033[1;30m"
     val ENDC = "\033[0m"
@@ -75,6 +71,8 @@ class CassandraUtils extends Serializable{
         result
     }
 
+    def color(str: String, col: String): String = "%s%s%s".format(col, str, ENDC)
+
     /**
      * @constructor getTweetsContentFromEdge
      *
@@ -114,10 +112,26 @@ class CassandraUtils extends Serializable{
         sc.parallelize(result)
     }
 
-    def color(str: String, col: String): String = "%s%s%s".format(col, str, ENDC)
+    /*def getAllTweetsText(sc: SparkContext): ArrayBuffer[String] = {
+        val rdd = sc.cassandraTable("twitter", "tweet_filtered2").select("tweet_text").cache()
+
+        var dictionnary = new ArrayBuffer[String]
+
+        println("Tweets by tweets -> Create documents and vocabulary")
+        rdd.select("tweet_text").as((i: String) => i).foreach(x => {
+
+            val tweet = x
+                .toLowerCase.split("\\s")
+                .filter(_.length > 3)
+                .filter(_.forall(java.lang.Character.isLetter)).mkString(" ")
+
+            if (tweet.length > 1)
+                dictionnary += tweet
+        })
+    }*/
 
     // (RDD[(VertexId, (String))], RDD[Edge[String]])
-    def getAllCommunications(sc: SparkContext): Graph[String, String] = {
+    def getAllCommunicationsToGraph(sc: SparkContext): Graph[String, String] = {
         println(color("\nCall getAllCommunications", RED))
 
 
@@ -139,10 +153,10 @@ class CassandraUtils extends Serializable{
 
 
         // Collection of vertices (contains users)
-       // val collectionVertices = ListBuffer[(Long, String)]()
+        // val collectionVertices = ListBuffer[(Long, String)]()
 
 
-       // val users: RDD[(VertexId, (String))] = sc.parallelize(collectionVertices)
+        // val users: RDD[(VertexId, (String))] = sc.parallelize(collectionVertices)
 
 
         //val con = sc.cassandraTable("twitter", "user_filtered")
@@ -157,7 +171,7 @@ class CassandraUtils extends Serializable{
         var t1 = System.nanoTime()
         println("Elapsed time: " + (t1 - t0) + "ns")*/
 
-       // val query = sc.cassandraTable("twitter", "user_filtered").select("user_local_id", "user_screen_name")
+        // val query = sc.cassandraTable("twitter", "user_filtered").select("user_local_id", "user_screen_name")
 
 
         /*val con = query.map{
@@ -174,8 +188,6 @@ class CassandraUtils extends Serializable{
         val rdd1 = cc.sql("SELECT tweet_id, user_send_local_id, user_dest_id from twitter.users_communicate")
 
         val pelo2 = rdd1.map(p => Edge(p(1).toString.toLong, p(2).toString.toLong, p(0).toString)).cache()
-
-        println("wesh")
 
         Graph(pelo, pelo2)
 
