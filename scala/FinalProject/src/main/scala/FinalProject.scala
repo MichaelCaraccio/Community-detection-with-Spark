@@ -4,7 +4,9 @@ import org.apache.spark.sql.cassandra.CassandraSQLContext
 import org.apache.spark.streaming._
 import org.apache.spark.{SparkConf, SparkContext}
 import utils._
+import org.apache.spark.Accumulator
 import org.apache.spark.streaming.twitter.TwitterUtils
+import java.nio.charset.StandardCharsets
 
 import scala.math._
 
@@ -19,7 +21,7 @@ import org.apache.spark.mllib.linalg.{Vector, Vectors}
 import org.apache.spark.rdd.RDD
 
 import scala.collection.mutable
-import scala.collection.mutable.ArrayBuffer
+import scala.collection.mutable.{ListBuffer, ArrayBuffer}
 import scala.util.matching.Regex
 
 // To make some of the examples work we will also need RDD
@@ -39,10 +41,10 @@ object FinalProject {
     private val defaultSeed = 0xadc83b19L
     var tweetsArray = new ArrayBuffer[Seq[String]]
     var dictionnary = new ArrayBuffer[String]
-    var results = new ArrayBuffer[(Seq[(Long, Vector)], Array[String])]
+    //var results = new ArrayBuffer[(Seq[(Long, Vector)], Array[String])]
     var ldaModel: LDAModel = null
     var lda: LDA = null
-    var vocab: Map[String, Int] = null
+    //var vocab: Map[String, Int] = null
 
     def color(str: String, col: String): String = "%s%s%s".format(col, str, ENDC)
 
@@ -80,6 +82,7 @@ object FinalProject {
 
         // Pattern used to find users
         val pattern = new Regex("\\@\\w{3,}")
+        val patternThreeOrMore = new Regex("\\w{3,}")
         val patternURL = new Regex("(http|ftp|https)://[A-Za-z0-9-_]+.[A-Za-z0-9-_:%&?/.=]+")
         val patternSmiley = new Regex("((?::|;|=)(?:-)?(?:\\)|D|P|3|O))")
 
@@ -103,6 +106,8 @@ object FinalProject {
 
         val graph = loadGraphFromCassandra(cu, sc)
 
+        //graph.edges.toJavaRDD().saveAsTextFile("/sds")
+
         /*val subGraphes = time {
             comUtils splitCommunity(graph, graph.vertices, true)
         }*/
@@ -110,9 +115,9 @@ object FinalProject {
 
         val topicSmoothing = 1.2
         val termSmoothing = 1.2
-        val numTopics = 5
-        val numIterations = 10
-        val numWordsByTopics = 5
+        val numTopics = 6
+        val numIterations = 2 //10
+        val numWordsByTopics = 8
         val numStopwords = 0
 
         // Set LDA parameters
@@ -126,7 +131,7 @@ object FinalProject {
 
         println("Init LDA")
 
-        val rdd = sc.cassandraTable("twitter", "tweet_filtered2").select("tweet_text").cache()
+        val rdd = sc.cassandraTable("twitter", "tweet_filtered").select("tweet_text").cache()
 
         // Create documents
         var firstDoc = ArrayBuffer[String]()
@@ -147,6 +152,7 @@ object FinalProject {
 
         ldaModel = lda.run(newdoc)
 
+
         // Find topics
         ldaModel = time {
             mu findTopics(ldaModel, newvocabArray, numWordsByTopics, true)
@@ -160,16 +166,107 @@ object FinalProject {
         println("Tweets by tweets -> Create documents and vocabulary")
         rdd.select("tweet_text").as((i: String) => i).cache().foreach(x => {
 
-            println("Current tweet: " + x.toString)
 
-            dictionnary += x
+           // val t = new String(x.getBytes(StandardCharsets.UTF_8), StandardCharsets.UTF_8)
+                   /* .toLowerCase.split("\\s")
+                    .filter(_.length > 3)
+                    .filter(_.forall(java.lang.Character.isLetter)).mkString(" ")
 
-            results += createdoc(dictionnary, x, 0)
+                    //.replaceAll("\\w{,3}", "")
+                    .replace('Ý', 'Y')
+                    .replaceAll("Ù | Ú | Û | Ü", "U")
+                    .replaceAll("Ò | Ó | Ô | Õ | Ö", "O")
+                    .replaceAll("Ì | Í | Î | Ï", "I")
+                    .replaceAll("È | É | Ê | Ë", "E")
+                    .replace('Ç', 'C')*/
+
+           // val con = t.toString.replaceAll("\\?","")
+
+           // println(t)
+
+            val con = x
+                .toLowerCase.split("\\s")
+                .filter(_.length > 3)
+                .filter(_.forall(java.lang.Character.isLetter)).mkString(" ")
+
+            println(con)
+
+            dictionnary += x.getBytes(StandardCharsets.UTF_16).toString
+
+                            .toLowerCase.split("\\s")
+                            .filter(_.length > 3)
+                            .filter(_.forall(java.lang.Character.isLetter)).mkString(" ")
+                            .replaceAll("[^ a-zA-Z0-9]", "")
+                            .replaceAll("\\w{3,}", "")
+                            .replace('Ý', 'Y')
+                            .replaceAll("Ù | Ú | Û | Ü", "U")
+                            .replaceAll("Ò | Ó | Ô | Õ | Ö", "O")
+                            .replaceAll("Ì | Í | Î | Ï", "I")
+                            .replaceAll("È | É | Ê | Ë", "E")
+                            .replace('Ç', 'C')
+                            .replaceAll("À | Á | Â | Ã | Ä | Å | Æ", "A")
+
         })
 
-        println("LDA started")
+        var s = new ArrayBuffer[String]
+
+        var tab1 = new ArrayBuffer[Double]
+        var tab2 = new ArrayBuffer[Double]
+
+        var tabcosine = new ArrayBuffer[Double]
+
+        for(i <- dictionnary.indices) {
+            println(i)
+
+            s = (s ++ dictionnary(i).split(" ")).distinct
+            //s = s.distinct
+
+            //results += createdoc(s, dictionnary(i), 0)
+            val (res1:Seq[(Long, Vector)], res2:Array[String]) = createdoc(s, dictionnary(i))
+
+            println("Current tweet : " + dictionnary(i))
+            //results.apply(j)._1.foreach(println(_))
+
+            ldaModel = lda.run(ssc.sparkContext.parallelize(res1).cache())
+            ldaModel = time {
+                mu findTopics(ldaModel, res2, numWordsByTopics, true)
+            }
+
+            val topicIndices = ldaModel.describeTopics()
+            topicIndices.foreach { case (terms, termWeights) =>
+                terms.zip(termWeights).foreach { case (term, weight) =>
+                    tab1 += res1.filter(x => x._1 == term).head._2.apply(term)
+                    tab2 += weight
+                }
+
+                //println("cosine for each topics")
+                //println(cosineSimilarity(tab1, tab2))
+
+                // Store every cosine similarity
+                tabcosine += cosineSimilarity(tab1, tab2)
+
+                // Reset array
+                tab1 = new ArrayBuffer[Double]
+                tab2 = new ArrayBuffer[Double]
+            }
+
+            val biggestCosineIndex: Int = tabcosine.indexOf(tabcosine.max)
+            println("Most similarity found with this topic: " + tabcosine(biggestCosineIndex))
+            println("Topic words : ")
+
+            ldaModel.describeTopics(6).apply(biggestCosineIndex)._1.foreach { x =>
+                println(res2(x))
+            }
+
+            tabcosine = new ArrayBuffer[Double]
+
+        }
+
+        /*println("LDA started")
         for (j <- results.indices) {
             println("Current tweet : " + dictionnary(j))
+            //results.apply(j)._1.foreach(println(_))
+
             ldaModel = lda.run(ssc.sparkContext.parallelize(results.apply(j)._1))
             ldaModel = time {
                 mu findTopics(ldaModel, results.apply(j)._2, numWordsByTopics, true)
@@ -208,11 +305,34 @@ object FinalProject {
             }
 
             tabcosine = new ArrayBuffer[Double]
-
-            println("-----------------------------------")
-
-
         }
+*/
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
         println("---- Streaming started ----")
 
@@ -573,30 +693,32 @@ object FinalProject {
 
     }
 
-    def createdoc(dictionnary: ArrayBuffer[String], x: String, numStopwords: Int = 0): ((Seq[(Long, Vector)], Array[String])) = {
-        val tokenizedCorpus: Seq[String] =
-            dictionnary.reverse.map(_.toLowerCase.split("\\s")).flatMap(_.filter(_.length > 3).filter(_.forall(java.lang.Character.isLetter))).toSeq
-
-        val tokenizedTweet: Seq[String] =
-            x.toLowerCase.split("\\s").filter(_.length > 3).filter(_.forall(java.lang.Character.isLetter))
+    def createdoc(tokenizedCorpus:ArrayBuffer[String] ,x: String): ((Seq[(Long, Vector)], Array[String])) = {
+        /*val tokenizedCorpus: Seq[String] =
+            dict.map(_.toLowerCase.split("\\s")).flatMap(_.filter(_.length > 3).filter(_.forall(java.lang.Character.isLetter))).toSeq
+*/
+        /*println("tokenizedCorpus")
+        dict.map(_.toLowerCase.split("\\s")).flatMap(_.filter(_.length > 3).filter(_.forall(java.lang.Character.isLetter))).foreach(println(_))
+        println("tokenizedCorpus")*/
+        val tokenizedTweet: Seq[String] = x.split(" ").toSeq
 
 
         // Choose the vocabulary
         // termCounts: Sorted list of (term, termCount) pairs
         // http://stackoverflow.com/questions/15487413/scala-beginners-simplest-way-to-count-words-in-file
-        val termCounts = tokenizedCorpus.flatMap(_.split("\\W+")).foldLeft(Map.empty[String, Int]) {
+        /*val termCounts = tokenizedCorpus.flatMap(_.split("\\W+")).foldLeft(Map.empty[String, Int]) {
             (count, word) => count + (word -> (count.getOrElse(word, 0) + 1))
         }.toArray
 
         // vocabArray contains all distinct words
         val vocabArray: Array[String] = termCounts.takeRight(termCounts.length - numStopwords).map(_._1)
-
+*/
 
         // Map[String, Int] of words and theirs places in tweet
-        vocab = vocabArray.zipWithIndex.toMap
-        //vocab.foreach(println(_))
+        val vocab: Map[String, Int] = tokenizedCorpus.zipWithIndex.toMap
 
-        vocab.foreach(println(_))
+        //println("vsize:" + vocab.size)
+        //vocab.foreach(println(_))
 
         // MAP : [ Word ID , VECTOR [vocab.size, WordFrequency]]
         val documents: Map[Long, Vector] =
@@ -613,10 +735,10 @@ object FinalProject {
                 (id.toLong, Vectors.sparse(vocab.size, counts.toSeq))
             }
 
-        documents.foreach(println(_))
+        //documents.foreach(println(_))
 
 
-        (documents.toSeq, vocabArray)
+        (documents.toSeq, tokenizedCorpus.toArray)
     }
 
     /*
