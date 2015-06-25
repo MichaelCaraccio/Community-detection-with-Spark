@@ -108,6 +108,7 @@ class CassandraUtils /*extends Serializable*/ {
             result.foreach(println(_))
         }
 
+
         // return
         sc.parallelize(result)
     }

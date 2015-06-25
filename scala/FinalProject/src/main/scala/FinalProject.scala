@@ -205,14 +205,43 @@ object FinalProject {
 
         // LDA for initial corpus
         println("Creation du contenu")
-        s = dictionnary.distinct
+
+
+
+        println(dictionnary.toString())
+        //println("Size: " + dictionnary.size + "Length: " + dictionnary.length)
+        val dictDistinct = dictionnary.distinct
+        println("Size: " + dictionnary.size + "Length: " + dictionnary.length + "Size: " + dictDistinct.size + "Length: " + dictDistinct.length)
+
+        val sss = dictionnary.toString().split(" ").distinct
+        println("Size: " + sss.size + "Length: " + sss.length)
+
+
+        for(i <- (0 until 10)){
+            println("dis: "+dictDistinct(i) + "dic: " + dictionnary(i))
+        }
+        var dis = new ArrayBuffer[String]
+        for(i <- dictionnary.indices) {
+            dis = dis ++ dictionnary(i).split(" ")
+        }
+        println("Size: " + dis.size + "Length: " + dis.length )
+
+        dis.distinct
+
+        for(i <- (0 until 10)){
+            println("dis: "+dis(i))
+        }
+
+        println("Size: " + dis.size + "Length: " + dis.length )
         /*for(i <- dictionnary.indices) {
+            println("dict: "+dictionnary(i).length)
             s = (s ++ dictionnary(i).split(" ")).distinct
+            println("s: "+ s.length)
         }*/
 
         // Create document
         println("Creation du document")
-        val (res1:Seq[(Long, Vector)], res2:Array[String]) = createdoc(s, dictionnary.toString())
+        val (res1:Seq[(Long, Vector)], res2:Array[String]) = createdoc(dictDistinct, dictionnary.toString())
 
         // Start LDA
         println("LDA Started")
@@ -677,7 +706,7 @@ object FinalProject {
         dict.map(_.toLowerCase.split("\\s")).flatMap(_.filter(_.length > 3).filter(_.forall(java.lang.Character.isLetter))).foreach(println(_))
         println("tokenizedCorpus")*/
         val tokenizedTweet: Seq[String] = x.split(" ").toSeq
-
+        println("tokenizedTweet finished")
 
         // Choose the vocabulary
         // termCounts: Sorted list of (term, termCount) pairs
@@ -692,7 +721,7 @@ object FinalProject {
 
         // Map[String, Int] of words and theirs places in tweet
         val vocab: Map[String, Int] = tokenizedCorpus.zipWithIndex.toMap
-
+        println("vocab finished")
         //println("vsize:" + vocab.size)
         //vocab.foreach(println(_))
 
