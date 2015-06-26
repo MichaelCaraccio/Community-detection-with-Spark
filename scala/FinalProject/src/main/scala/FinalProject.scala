@@ -95,10 +95,10 @@ object FinalProject {
 
         // Set the system properties so that Twitter4j library used by twitter stream
         // can use them to generat OAuth credentials
-        System.setProperty("twitter4j.oauth.consumerKey", tc.getconsumerKey)
-        System.setProperty("twitter4j.oauth.consumerSecret", tc.getconsumerSecret)
-        System.setProperty("twitter4j.oauth.accessToken", tc.getaccessToken)
-        System.setProperty("twitter4j.oauth.accessTokenSecret", tc.getaccessTokenSecret)
+        System.setProperty("twitter4j.oauth.consumerKey", tc.getconsumerKey())
+        System.setProperty("twitter4j.oauth.consumerSecret", tc.getconsumerSecret())
+        System.setProperty("twitter4j.oauth.accessToken", tc.getaccessToken())
+        System.setProperty("twitter4j.oauth.accessTokenSecret", tc.getaccessTokenSecret())
 
         val ssc = new StreamingContext(sparkConf, Seconds(10))
         val stream = TwitterUtils.createStream(ssc, None, words)
