@@ -58,6 +58,7 @@ object FinalProject {
         val comUtils = new CommunityUtils
         val gu = new GraphUtils
         val ru = new RDDUtils
+        val tc = new TwitterConfig
 
         // Display only warning and infos messages
         Logger.getLogger("org").setLevel(Level.ERROR)
@@ -69,20 +70,22 @@ object FinalProject {
 
         // Spark configuration
         val sparkConf = new SparkConf(true)
-            .setMaster("local[4]")
+            .setMaster("local[16]")
             .setAppName("FinalProject")
             //.set("spark.driver.cores", "4")
             .set("spark.driver.maxResultSize", "0") // no limit
             //.set("spark.executor.memory", "2g") // Amount of memory to use for the driver process
             //.set("spark.executor.memory", "2g") // Amount of memory to use per executor process
-            .set("spark.cassandra.connection.host", "127.0.0.1") // Link to Cassandra
+            .set("spark.cassandra.connection.host", "157.26.83.16") // Link to Cassandra
+            .set("spark.cassandra.auth.username", "cassandra")
+            .set("spark.cassandra.auth.password", "cassandra")
+            .set("spark.executor.extraJavaOptions", "-XX:MaxPermSize=256M -XX:+UseCompressedOops")
 
         // Filters by words that contains @
         val words = Array(" @")
 
         // Pattern used to find users
         val pattern = new Regex("\\@\\w{3,}")
-        val patternThreeOrMore = new Regex("\\w{3,}")
         val patternURL = new Regex("(http|ftp|https)://[A-Za-z0-9-_]+.[A-Za-z0-9-_:%&?/.=]+")
         val patternSmiley = new Regex("((?::|;|=)(?:-)?(?:\\)|D|P|3|O))")
 
@@ -92,10 +95,10 @@ object FinalProject {
 
         // Set the system properties so that Twitter4j library used by twitter stream
         // can use them to generat OAuth credentials
-        System.setProperty("twitter4j.oauth.consumerKey", "MCrQfOAttGZnIIkrqZ4lQA9gr")
-        System.setProperty("twitter4j.oauth.consumerSecret", "5NnYhhGdfyqOE4pIXXdYkploCybQMzFJiQejZssK4a3mNdkCoa")
-        System.setProperty("twitter4j.oauth.accessToken", "237197078-6zwzHsuB3VY3psD5873hhU3KQ1lSVQlOXyBhDqpG")
-        System.setProperty("twitter4j.oauth.accessTokenSecret", "UIMZ1aD06DObpKI741zC8wHZF8jkj1bh02Lqfl5cQ76Pl")
+        System.setProperty("twitter4j.oauth.consumerKey", tc.getconsumerKey)
+        System.setProperty("twitter4j.oauth.consumerSecret", tc.getconsumerSecret)
+        System.setProperty("twitter4j.oauth.accessToken", tc.getaccessToken)
+        System.setProperty("twitter4j.oauth.accessTokenSecret", tc.getaccessTokenSecret)
 
         val ssc = new StreamingContext(sparkConf, Seconds(10))
         val stream = TwitterUtils.createStream(ssc, None, words)
@@ -136,6 +139,7 @@ object FinalProject {
         //val rdd = sc.cassandraTable("twitter", "tweet_filtered").select("tweet_text").cache()
 
         /*
+
         // Create documents
         var firstDoc = ArrayBuffer[String]()
         firstDoc += "Concentration parameter commonly named for the prior placed"
@@ -161,12 +165,19 @@ object FinalProject {
             mu findTopics(ldaModel, newvocabArray, numWordsByTopics, true)
         }
 
-*/
+        */
 
         // http://ochafik.com/blog/?p=806
 
 
-        /*println("Tweets by tweets -> Create documents and vocabulary")
+        /********************************************************************
+        // LDA CREATED FROM CASSANDRA
+          ********************************************************************/
+        /*
+        // Get every tweets
+        val rdd = sc.cassandraTable("twitter", "tweet_filtered").select("tweet_text").cache()
+
+        println("Tweets by tweets -> Create documents and vocabulary")
         rdd.select("tweet_text").as((i: String) => i).cache().foreach(x => {
 
             val tweet = x
@@ -176,26 +187,7 @@ object FinalProject {
 
             if (tweet.length > 1)
                 dictionnary += tweet
-
-        })*/
-
-
-        // Get every tweets
-        val rdd = sc.cassandraTable("twitter", "tweet_filtered").select("tweet_text").cache()
-
-        println("Tweets by tweets -> Create documents and vocabulary")
-        rdd.select("tweet_text").as((i: String) => i).foreach(x => {
-
-            val tweet = x
-                .toLowerCase.split("\\s")
-                .filter(_.length > 3)
-                .filter(_.forall(java.lang.Character.isLetter)).mkString(" ")
-
-            if (tweet.length > 1)
-                dictionnary += tweet
         })
-
-        var s = new ArrayBuffer[String]
 
         var tab1 = new ArrayBuffer[Double]
         var tab2 = new ArrayBuffer[Double]
@@ -207,37 +199,8 @@ object FinalProject {
         println("Creation du contenu")
 
 
-
-        println(dictionnary.toString())
-        //println("Size: " + dictionnary.size + "Length: " + dictionnary.length)
         val dictDistinct = dictionnary.distinct
-        println("Size: " + dictionnary.size + "Length: " + dictionnary.length + "Size: " + dictDistinct.size + "Length: " + dictDistinct.length)
 
-        val sss = dictionnary.toString().split(" ").distinct
-        println("Size: " + sss.size + "Length: " + sss.length)
-
-
-        for(i <- (0 until 10)){
-            println("dis: "+dictDistinct(i) + "dic: " + dictionnary(i))
-        }
-        var dis = new ArrayBuffer[String]
-        for(i <- dictionnary.indices) {
-            dis = dis ++ dictionnary(i).split(" ")
-        }
-        println("Size: " + dis.size + "Length: " + dis.length )
-
-        dis.distinct
-
-        for(i <- (0 until 10)){
-            println("dis: "+dis(i))
-        }
-
-        println("Size: " + dis.size + "Length: " + dis.length )
-        /*for(i <- dictionnary.indices) {
-            println("dict: "+dictionnary(i).length)
-            s = (s ++ dictionnary(i).split(" ")).distinct
-            println("s: "+ s.length)
-        }*/
 
         // Create document
         println("Creation du document")
@@ -250,7 +213,7 @@ object FinalProject {
             mu findTopics(ldaModel, res2, numWordsByTopics, true)
         }
         println("LDA Finished\nDisplay results")
-        val topicIndices = ldaModel.describeTopics()
+        val topicIndices = ldaModel.describeTopics(5)
         topicIndices.foreach { case (terms, termWeights) =>
             terms.zip(termWeights).foreach { case (term, weight) =>
                 tab1 += res1.filter(x => x._1 == term).head._2.apply(term)
@@ -274,6 +237,9 @@ object FinalProject {
         }
 
         tabcosine = new ArrayBuffer[Double]
+
+        */
+
 
 
 
@@ -722,14 +688,14 @@ object FinalProject {
         // Map[String, Int] of words and theirs places in tweet
         val vocab: Map[String, Int] = tokenizedCorpus.zipWithIndex.toMap
         println("vocab finished")
-        //println("vsize:" + vocab.size)
+        println("vsize:" + vocab.size)
         //vocab.foreach(println(_))
 
         // MAP : [ Word ID , VECTOR [vocab.size, WordFrequency]]
         val documents: Map[Long, Vector] =
             vocab.map { case (tokens, id) =>
                 val counts = new mutable.HashMap[Int, Double]()
-
+                //println(documents.size)
                 // Word ID
                 val idx = vocab(tokens)
 
