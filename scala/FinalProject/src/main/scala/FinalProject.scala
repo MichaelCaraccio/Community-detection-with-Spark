@@ -58,6 +58,7 @@ object FinalProject {
         val comUtils = new CommunityUtils
         val gu = new GraphUtils
         val ru = new RDDUtils
+        val tc = new TwitterConfig
 
         // Display only warning and infos messages
         Logger.getLogger("org").setLevel(Level.ERROR)
@@ -85,7 +86,6 @@ object FinalProject {
 
         // Pattern used to find users
         val pattern = new Regex("\\@\\w{3,}")
-        val patternThreeOrMore = new Regex("\\w{3,}")
         val patternURL = new Regex("(http|ftp|https)://[A-Za-z0-9-_]+.[A-Za-z0-9-_:%&?/.=]+")
         val patternSmiley = new Regex("((?::|;|=)(?:-)?(?:\\)|D|P|3|O))")
 
@@ -95,10 +95,10 @@ object FinalProject {
 
         // Set the system properties so that Twitter4j library used by twitter stream
         // can use them to generat OAuth credentials
-        System.setProperty("twitter4j.oauth.consumerKey", "MCrQfOAttGZnIIkrqZ4lQA9gr")
-        System.setProperty("twitter4j.oauth.consumerSecret", "5NnYhhGdfyqOE4pIXXdYkploCybQMzFJiQejZssK4a3mNdkCoa")
-        System.setProperty("twitter4j.oauth.accessToken", "237197078-6zwzHsuB3VY3psD5873hhU3KQ1lSVQlOXyBhDqpG")
-        System.setProperty("twitter4j.oauth.accessTokenSecret", "UIMZ1aD06DObpKI741zC8wHZF8jkj1bh02Lqfl5cQ76Pl")
+        System.setProperty("twitter4j.oauth.consumerKey", tc.getconsumerKey)
+        System.setProperty("twitter4j.oauth.consumerSecret", tc.getconsumerSecret)
+        System.setProperty("twitter4j.oauth.accessToken", tc.getaccessToken)
+        System.setProperty("twitter4j.oauth.accessTokenSecret", tc.getaccessTokenSecret)
 
         val ssc = new StreamingContext(sparkConf, Seconds(10))
         val stream = TwitterUtils.createStream(ssc, None, words)
@@ -241,7 +241,7 @@ object FinalProject {
         */
 
 
-        
+
 
         /*for(i <- dictionnary.indices) {
             println(i)
