@@ -46,6 +46,9 @@ object FinalProject {
     var lda: LDA = null
     //var vocab: Map[String, Int] = null
 
+    var newGraph:Graph[String, String] = null
+    var stockGraph:Graph[String, String] = null
+
     def color(str: String, col: String): String = "%s%s%s".format(col, str, ENDC)
 
     def main(args: Array[String]) {
@@ -100,7 +103,7 @@ object FinalProject {
         System.setProperty("twitter4j.oauth.accessToken", tc.getaccessToken)
         System.setProperty("twitter4j.oauth.accessTokenSecret", tc.getaccessTokenSecret)
 
-        val ssc = new StreamingContext(sparkConf, Seconds(10))
+        val ssc = new StreamingContext(sparkConf, Seconds(20))
         val stream = TwitterUtils.createStream(ssc, None, words)
 
         // Init SparkContext
@@ -364,14 +367,16 @@ object FinalProject {
         // ************************************************************
         commStream.foreachRDD(rdd => {
 
+            println("commstream appelé")
+
             // RDD -> Array()
             val tabValues = rdd.collect()
 
             // Collection of vertices (contains users)
-            val collectionVertices = ArrayBuffer[(Long, String)]()
+            var collectionVertices = new ArrayBuffer[(Long, String)]()
 
             // Collection of edges (contains communications between users)
-            val collectionEdge = ArrayBuffer[Edge[String]]()
+            var collectionEdge = new ArrayBuffer[Edge[String]]()
 
             // For each tweets in RDD
             for (item <- tabValues.toArray) {
@@ -400,6 +405,8 @@ object FinalProject {
                         collectionVertices += ((destID, user_dest_name))
                         collectionEdge += Edge(sendID, destID, item._1)
 
+
+
                         // TODO : Optimize save to cassandra with concatenate seq and save it when the loop is over
                         val collection = rdd.context.parallelize(Seq((item._1, item._2, sendID, destID)))
 
@@ -416,24 +423,46 @@ object FinalProject {
                 }
             }
 
-            // Convert vertices to RDD
-            val VerticesRDD = ru ArrayToVertices(sc, collectionVertices)
 
-            // Convert it to RDD
-            val EdgeRDD = ru ArrayToEdges(sc, collectionEdge)
 
             // Create Graph
-            val testGraph = time {
-                Graph(VerticesRDD, EdgeRDD)
+            //val testGraph = time {
+            //    Graph(VerticesRDD, EdgeRDD)
+            //}
+
+            if(stockGraph == null ){
+                // Convert vertices to RDD
+                val VerticesRDD = ru ArrayToVertices(sc, collectionVertices)
+
+                // Convert it to RDD
+                val EdgeRDD = ru ArrayToEdges(sc, collectionEdge)
+
+                println("----DEDANS----")
+                stockGraph = time {
+                    Graph(VerticesRDD, EdgeRDD).cache()
+                }
             }
 
-            println("Comm saved in cassandra: " + testGraph.vertices.collect().length)
-            println("Graph : " + testGraph.vertices.collect().length + " Vertices and " + testGraph.edges.collect().length + " edges")
-            testGraph.vertices.collect().foreach(println(_))
-            testGraph.edges.collect().foreach(println(_))
+
+            //val vset:VertexRDD[(String)] = VertexRDD(VerticesRDD)
+           // val dsdsds:RDD[(VertexId, String)] = sc.parallelize(collectionVertices)
+           // val rddB: RDD[(VertexId, String)] = sc.parallelize(0L until 100L).flatMap(id => List((id, "a"), (id, "s")))
+
+            //stockGraph.edges.union(sc.parallelize(collectionEdge))
+            //stockGraph.vertices.union(sc.parallelize(collectionVertices))
+
+            time { stockGraph = Graph(stockGraph.vertices.union(sc.parallelize(collectionVertices)), stockGraph.edges.union(sc.parallelize(collectionEdge))).cache() }
+
+            collectionVertices = new ArrayBuffer[(Long, String)]()
+            collectionEdge = new ArrayBuffer[Edge[String]]()
+
+            //println("Comm saved in cassandra: " + stockGraph.vertices.collect().length)
+            time { println("Graph : " + stockGraph.vertices.collect().length + " Vertices and " + stockGraph.edges.collect().length + " edges") }
+            //stockGraph.vertices.collect().foreach(println(_))
+            //stockGraph.edges.collect().foreach(println(_))
 
             val subGraphes = time {
-                comUtils splitCommunity(testGraph, testGraph.vertices, true)
+                comUtils splitCommunity(stockGraph, stockGraph.vertices, true)
             }
 
         })

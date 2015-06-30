@@ -17,6 +17,22 @@ class CommunityUtils extends Logging with Serializable {
     val ENDC = "\033[0m"
 
     /**
+     * @constructor time
+     *
+     *              timer for profiling block
+     *
+     * @param R $block - Block executed
+     * @return Unit
+     */
+    def time[R](block: => R): R = {
+        val t0 = System.nanoTime()
+        val result = block // call-by-name
+        val t1 = System.nanoTime()
+        println("Elapsed time: " + (t1 - t0) / 1000000000.0 + " seconds")
+        result
+    }
+
+    /**
      * splitCommunity
      *
      * Find and split communities in graph
@@ -31,25 +47,29 @@ class CommunityUtils extends Logging with Serializable {
 
         println(color("\nCall SplitCommunity", RED))
 
-        val graph_2 = getKCoreGraph(graph, users, 4, false).cache()
+        val graph_2 = time { getKCoreGraph(graph, users, 4, false).cache() }
 
+
+
+        /*
         // Find the connected components
-        val cc = graph_2.connectedComponents().vertices
+        val cc = time { graph_2.connectedComponents().vertices.cache() }
 
         // Join the connected components with the usernames and id
         // The result is an RDD not a Graph
         val ccByUsername = users.join(cc).map {
             case (id, (username, cc)) => (id, username, cc)
-        }
+        }.cache()
 
         // Print the result
-        val lowerIDPerCommunity = ccByUsername.map { case (id, username, cc) => cc }.distinct()
+        val lowerIDPerCommunity = ccByUsername.map { case (id, username, cc) => cc }.distinct().cache()
 
         // Result will be stored in an array
         var result = ArrayBuffer[Graph[String, String]]()
         println("--------------------------")
-        println("Total community found: " + lowerIDPerCommunity.collect().length)
+        println("Total community found: " + lowerIDPerCommunity.count())
         println("--------------------------")
+
         for (id <- lowerIDPerCommunity.collect()) {
 
             println("\nCommunity ID : " + id)
@@ -72,7 +92,58 @@ class CommunityUtils extends Logging with Serializable {
             println("\nCommunities found " + result.size)
             for (community <- result) {
                 println("-----------------------")
-                //community.edges.collect().foreach(println(_))
+                community.edges.collect().foreach(println(_))
+                community.vertices.collect().foreach(println(_))
+            }
+        }
+
+        result
+
+        */
+    }
+
+    def subgraphCommunities(graph: Graph[String, String], users: RDD[(VertexId, (String))], displayResult: Boolean): ArrayBuffer[Graph[String, String]] ={
+        // Find the connected components
+        val cc = time { graph.connectedComponents().vertices.cache() }
+
+        // Join the connected components with the usernames and id
+        // The result is an RDD not a Graph
+        val ccByUsername = users.join(cc).map {
+            case (id, (username, cc)) => (id, username, cc)
+        }.cache()
+
+        // Print the result
+        val lowerIDPerCommunity = ccByUsername.map { case (id, username, cc) => cc }.distinct().cache()
+
+        // Result will be stored in an array
+        var result = ArrayBuffer[Graph[String, String]]()
+        println("--------------------------")
+        println("Total community found: " + lowerIDPerCommunity.count())
+        println("--------------------------")
+
+        for (id <- lowerIDPerCommunity.collect()) {
+
+            println("\nCommunity ID : " + id)
+
+            val subGraphVertices = ccByUsername.filter {
+                _._3 == id
+            }.map { case (id, username, cc) => (id, username) }
+
+            //subGraphVertices.foreach(println(_))
+
+            // Create a new graph
+            // And remove missing vertices as well as the edges to connected to them
+            var tempGraph = Graph(subGraphVertices, graph.edges).subgraph(vpred = (id, username) => username != null)
+
+            result += tempGraph
+        }
+
+        // Display communities
+        if (displayResult) {
+            println("\nCommunities found " + result.size)
+            for (community <- result) {
+                println("-----------------------")
+                community.edges.collect().foreach(println(_))
                 community.vertices.collect().foreach(println(_))
             }
         }
@@ -106,21 +177,20 @@ class CommunityUtils extends Logging with Serializable {
 
         // Graph[(Int, Boolean), ED] - boolean indicates whether it is active or not
         var g = graph.outerJoinVertices(graph.degrees)((vid, oldData, newData) => newData.getOrElse(0)).cache()
-        val degrees = graph.degrees
 
         println(color("\nCall KCoreDecomposition", RED))
 
-
         g = computeCurrentKCore(g, kmin).cache()
-        val testK = kmin
-        val vCount = g.vertices.filter { case (vid, vd) => vd >= kmin }.count()
-        val eCount = g.triplets.map { t => t.srcAttr >= testK && t.dstAttr >= testK }.count()
-        val v = g.vertices.filter { case (vid, vd) => vd >= kmin }
+
+        val v = g.vertices.filter { case (vid, vd) => vd >= kmin }.cache()
 
         // Display informations
         if (displayResult) {
-
+            val degrees = graph.degrees
             val numVertices = degrees.count()
+            val testK = kmin
+            val vCount = g.vertices.filter { case (vid, vd) => vd >= kmin }.count()
+            val eCount = g.triplets.map { t => t.srcAttr >= testK && t.dstAttr >= testK }.count()
 
             logWarning(s"Number of vertices: $numVertices")
             logWarning(s"Degree sample: ${degrees.take(10).mkString(", ")}")
@@ -138,7 +208,7 @@ class CommunityUtils extends Logging with Serializable {
         val gra = Graph(newUser, g.edges)
 
         // Remove missing vertices as well as the edges to connected to them
-        gra.subgraph(vpred = (id, username) => username != null)
+        gra.subgraph(vpred = (id, username) => username != null).cache()
     }
 
     def computeCurrentKCore[ED: ClassTag](graph: Graph[Int, ED], k: Int) = {
@@ -185,7 +255,6 @@ class CommunityUtils extends Logging with Serializable {
             }
         }
 
-        println("avant pregel")
         // Note that initial message should have no effect
         Pregel(graph, 0)(vProg, sendMsg, mergeMsg)
     }
