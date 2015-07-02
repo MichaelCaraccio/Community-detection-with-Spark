@@ -7,9 +7,6 @@ import org.apache.spark.rdd.RDD
 import scala.collection.mutable.ArrayBuffer
 import scala.math._
 import scala.reflect.ClassTag
-import org.apache.spark.storage.StorageLevel
-import org.apache.spark.util.Utils
-import org.apache.spark.graphx.PartitionStrategy._
 
 class CommunityUtils extends Logging with Serializable {
 
@@ -19,7 +16,7 @@ class CommunityUtils extends Logging with Serializable {
     /**
      * @constructor time
      *
-     *              timer for profiling block
+     * timer for profiling block
      *
      * @param R $block - Block executed
      * @return Unit
@@ -47,44 +44,49 @@ class CommunityUtils extends Logging with Serializable {
 
         println(color("\nCall SplitCommunity", RED))
 
-        val graph_2 = time { getKCoreGraph(graph, users, 4, displayResult).cache() }
+        getKCoreGraph(graph, users, 4, displayResult).cache()
+    }
 
-        graph_2
+    def subgraphCommunities(graph: Graph[String, String], users: RDD[(VertexId, (String))], displayResult: Boolean): ArrayBuffer[Graph[String, String]] = {
 
-        /*
+        println(color("\nCall subgraphCommunities", RED))
+
         // Find the connected components
-        val cc = time { graph_2.connectedComponents().vertices.cache() }
+        val cc = time {
+            graph.connectedComponents().vertices.cache()
+        }
 
         // Join the connected components with the usernames and id
         // The result is an RDD not a Graph
         val ccByUsername = users.join(cc).map {
-            case (id, (username, cc)) => (id, username, cc)
+            case (id, (username, cci)) => (id, username, cci)
         }.cache()
 
         // Print the result
-        val lowerIDPerCommunity = ccByUsername.map { case (id, username, cc) => cc }.distinct().cache()
+        val lowerIDPerCommunity = ccByUsername.map { case (id, username, cci) => cci }.distinct().cache()
+        //val totalCommunity = cc.map { cc => cc }.distinct()
 
         // Result will be stored in an array
-        var result = ArrayBuffer[Graph[String, String]]()
+        var result = new ArrayBuffer[Graph[String, String]]()
         println("--------------------------")
         println("Total community found: " + lowerIDPerCommunity.count())
         println("--------------------------")
 
         for (id <- lowerIDPerCommunity.collect()) {
 
+            // idComm => id
+
             println("\nCommunity ID : " + id)
 
             val subGraphVertices = ccByUsername.filter {
                 _._3 == id
             }.map { case (id, username, cc) => (id, username) }
 
-            //subGraphVertices.foreach(println(_))
-
             // Create a new graph
             // And remove missing vertices as well as the edges to connected to them
-            var tempGraph = Graph(subGraphVertices, graph_2.edges).subgraph(vpred = (id, username) => username != null)
+            val tempGraph = Graph(subGraphVertices, graph.edges).subgraph(vpred = (id, username) => username != null)
 
-            result += tempGraph
+            result += tempGraph.cache()
         }
 
         // Display communities
@@ -98,34 +100,38 @@ class CommunityUtils extends Logging with Serializable {
         }
 
         result
-
-        */
     }
 
-    def subgraphCommunities(graph: Graph[String, String], users: RDD[(VertexId, (String))], displayResult: Boolean): ArrayBuffer[Graph[String, String]] ={
+    def subgraphCommunities2(graph: Graph[String, String], users: RDD[(VertexId, (String))], displayResult: Boolean): (ArrayBuffer[Graph[String, String]], Array[Long]) = {
 
-        println(color("\nCall subgraphCommunities", RED))
+        println(color("\nCall subgraphCommunities2", RED))
 
         // Find the connected components
-        val cc = time { graph.connectedComponents().vertices.cache() }
+        val cc = time {
+            graph.connectedComponents().vertices.cache()
+        }
 
         // Join the connected components with the usernames and id
         // The result is an RDD not a Graph
         val ccByUsername = users.join(cc).map {
-            case (id, (username, cc)) => (id, username, cc)
+            case (id, (username, cci)) => (id, username, cci)
         }.cache()
 
         // Print the result
-        val lowerIDPerCommunity = ccByUsername.map { case (id, username, cc) => cc }.distinct()
-        val totalCommunity = cc.map{cc => cc}.distinct()
+        val lowerIDPerCommunity = ccByUsername.map { case (id, username, cci) => cci }.distinct().cache()
+        //val totalCommunity = cc.map { cc => cc }.distinct()
 
         // Result will be stored in an array
         var result = new ArrayBuffer[Graph[String, String]]()
         println("--------------------------")
-        println("Total community found: " + totalCommunity.count())
+        println("Total community found: " + lowerIDPerCommunity.count())
         println("--------------------------")
 
-        for (id <- lowerIDPerCommunity.collect()) {
+        val collectIDsCommunity = lowerIDPerCommunity.collect()
+        // For each community we want their LDA and cosine similarity
+        for (id <- collectIDsCommunity) {
+
+            // idComm => id
 
             println("\nCommunity ID : " + id)
 
@@ -135,9 +141,7 @@ class CommunityUtils extends Logging with Serializable {
 
             // Create a new graph
             // And remove missing vertices as well as the edges to connected to them
-            var tempGraph = Graph(subGraphVertices, graph.edges).subgraph(vpred = (id, username) => username != null)
-
-            result += tempGraph
+            result += Graph(subGraphVertices, graph.edges).subgraph(vpred = (id, username) => username != null).cache()
         }
 
         // Display communities
@@ -150,7 +154,7 @@ class CommunityUtils extends Logging with Serializable {
             }
         }
 
-        result
+        (result, collectIDsCommunity)
     }
 
     /**
@@ -178,7 +182,7 @@ class CommunityUtils extends Logging with Serializable {
                                                   displayResult: Boolean): Graph[String, ED] = {
 
         // Graph[(Int, Boolean), ED] - boolean indicates whether it is active or not
-        var g = graph.outerJoinVertices(graph.degrees)((vid, oldData, newData) => newData.getOrElse(0)).cache()
+        var g = graph.cache().outerJoinVertices(graph.degrees)((vid, oldData, newData) => newData.getOrElse(0)).cache()
 
         println(color("\nCall KCoreDecomposition", RED))
 
@@ -214,7 +218,7 @@ class CommunityUtils extends Logging with Serializable {
     }
 
     def computeCurrentKCore[ED: ClassTag](graph: Graph[Int, ED], k: Int) = {
-        println("Computing kcore for k="+k)
+        println("Computing kcore for k=" + k)
         def sendMsg(et: EdgeTriplet[Int, ED]): Iterator[(VertexId, Int)] = {
             if (et.srcAttr < 0 || et.dstAttr < 0) {
                 // if either vertex has already been turned off we do nothing

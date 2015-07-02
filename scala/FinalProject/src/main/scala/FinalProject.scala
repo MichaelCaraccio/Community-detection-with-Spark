@@ -4,11 +4,17 @@ import org.apache.spark.sql.cassandra.CassandraSQLContext
 import org.apache.spark.streaming._
 import org.apache.spark.{SparkConf, SparkContext}
 import utils._
-import org.apache.spark.Accumulator
 import org.apache.spark.streaming.twitter.TwitterUtils
-import java.nio.charset.StandardCharsets
-
+import org.apache.spark.storage.StorageLevel
 import scala.math._
+import com.google.gson.Gson
+import java.net.URI
+import org.apache.hadoop.fs.{FileUtil, Path, FileSystem}
+
+
+import org.apache.commons.io.FilenameUtils
+import org.apache.commons.lang.StringEscapeUtils
+
 
 // Cassandra
 
@@ -46,11 +52,15 @@ object FinalProject {
     var lda: LDA = null
     //var vocab: Map[String, Int] = null
 
-    var newGraph:Graph[String, String] = null
     var stockGraph:Graph[String, String] = null
+
     var counter = 0
 
     def color(str: String, col: String): String = "%s%s%s".format(col, str, ENDC)
+
+    var numTweetsCollected = 0L
+    var partNum = 0
+    var gson = new Gson()
 
     def main(args: Array[String]) {
 
@@ -377,7 +387,7 @@ object FinalProject {
             var collectionEdge = new ArrayBuffer[Edge[String]]()
 
             // For each tweets in RDD
-            for (item <- rdd.collect()) {
+            for (item <- rdd.cache().collect()) {
 
                 // Avoid single @ in message
                 if (item._4 != "" && (item._6 == "en" || item._6 == "en-gb")) {
@@ -427,12 +437,22 @@ object FinalProject {
                 // Convert it to RDD
                 val EdgeRDD = ru ArrayToEdges(sc, collectionEdge)
 
-                stockGraph = time {
-                    Graph(VerticesRDD, EdgeRDD).cache()
-                }
+                //stockGraph.unpersist()
+                stockGraph = Graph(VerticesRDD, EdgeRDD)
+                stockGraph.unpersist()
+                stockGraph.persist(StorageLevel.MEMORY_AND_DISK)
+
             }
 
-            time { stockGraph = Graph(stockGraph.vertices.union(sc.parallelize(collectionVertices)), stockGraph.edges.union(sc.parallelize(collectionEdge))).cache() }
+            //val path = "./people.json"
+            //val sqlContext = new org.apache.spark.sql.SQLContext(sc)
+
+            //val anotherPeople = sqlContext.
+
+
+
+
+            time { stockGraph = Graph(stockGraph.vertices.union(sc.parallelize(collectionVertices)), stockGraph.edges.union(sc.parallelize(collectionEdge))) }
 
             collectionVertices = new ArrayBuffer[(Long, String)]()
             collectionEdge = new ArrayBuffer[Edge[String]]()
@@ -446,11 +466,41 @@ object FinalProject {
                 comUtils splitCommunity(stockGraph, stockGraph.vertices, false)
             }
 
+            //communityGraph.edges.saveAsTextFile("./edges"+counter+".json")
+
+            //communityGraph.edges.coalesce(1,true).saveAsTextFile("edges"+counter+".json")
+
+
+            //sc.parallelize(Seq("zgeg", "anus")).coalesce(1,true).repartition(1).saveAsTextFile("edges"+counter+".json")
+
+            //val mapper = new ObjectMapper() with ScalaObjectMapper
+
+            //communityGraph.edges.coalesce(1,true).map(mapper.writeValueAsString(_)).saveAsTextFile("edges"+counter+".json")
+
+            //val connn  = communityGraph.edges.collect()
+
+            //connn.map(_).saveAsTextFile("./edges"+counter+".json")
+
             counter += 1
 
-            if (counter % 5 == 0){
-                time { comUtils subgraphCommunities(communityGraph, stockGraph.vertices, true) }
-            }
+            //if (counter % 5 == 0){
+            val (subgraphs, commIDs) = time { comUtils subgraphCommunities2(communityGraph, stockGraph.vertices, false) }
+
+            /*for (sub <- subgraphs) {
+                val outputRDD = sub.edges.coalesce(1, shuffle = true).map(gson.toJson(_))
+                val uri: URI = new URI(s"/home/mcaraccio/json/" + counter.toString + "/edges")
+                outputRDD.saveAsTextFile(uri.toString)
+
+                val outputRDDV = sub.vertices.coalesce(1, shuffle = true).map(gson.toJson(_))
+                //val uriV: URI = new URI(s"/home/mcaraccio/json/" + counter.toString + "/vertices")
+                ///outputRDDV.saveAsTextFile(uriV.toString)
+
+                val ff = outputRDD ++ outputRDDV
+                val uriM: URI = new URI(s"/home/mcaraccio/json/" + counter.toString + "/merge")
+                ff.saveAsTextFile(uriM.toString)
+
+            }*/
+            //}
 
         })
 
@@ -622,8 +672,6 @@ object FinalProject {
 
         */
     }
-
-
     /**
      * @constructor murmurHash64A
      *
