@@ -1,33 +1,25 @@
+import com.google.gson.Gson
 import org.apache.log4j.{Level, Logger}
 import org.apache.spark.graphx._
 import org.apache.spark.sql.cassandra.CassandraSQLContext
+import org.apache.spark.storage.StorageLevel
 import org.apache.spark.streaming._
+import org.apache.spark.streaming.twitter.TwitterUtils
 import org.apache.spark.{SparkConf, SparkContext}
 import utils._
-import org.apache.spark.streaming.twitter.TwitterUtils
-import org.apache.spark.storage.StorageLevel
-import scala.math._
-import com.google.gson.Gson
-import java.net.URI
-import org.apache.hadoop.fs.{FileUtil, Path, FileSystem}
-import scala.util.control._
 
-import org.apache.commons.io.FilenameUtils
-import org.apache.commons.lang.StringEscapeUtils
+import scala.math._
 
 
 // Cassandra
-
-import com.datastax.spark.connector._
 
 // Regex
 
 import org.apache.spark.mllib.clustering.{LDA, _}
 import org.apache.spark.mllib.linalg.{Vector, Vectors}
-import org.apache.spark.rdd.RDD
 
 import scala.collection.mutable
-import scala.collection.mutable.{ListBuffer, ArrayBuffer}
+import scala.collection.mutable.ArrayBuffer
 import scala.util.matching.Regex
 
 // To make some of the examples work we will also need RDD
@@ -55,8 +47,8 @@ object FinalProject {
     // Result will be stored in an array
     var result = new ArrayBuffer[String]
 
-    var stockGraph:Graph[String, String] = null
-    var currentTweets:String = ""
+    var stockGraph: Graph[String, String] = null
+    var currentTweets: String = ""
 
     var counter = 0
 
@@ -188,9 +180,9 @@ object FinalProject {
         // http://ochafik.com/blog/?p=806
 
 
-        /********************************************************************
+        /** ******************************************************************
         // LDA CREATED FROM CASSANDRA
-          ********************************************************************/
+          * *******************************************************************/
         /*
         // Get every tweets
         val rdd = sc.cassandraTable("twitter", "tweet_filtered").select("tweet_text").cache()
@@ -257,8 +249,6 @@ object FinalProject {
         tabcosine = new ArrayBuffer[Double]
 
         */
-
-
 
 
         /*for(i <- dictionnary.indices) {
@@ -426,6 +416,10 @@ object FinalProject {
 
             println("commstream appelé")
 
+            /**
+             * Enregistrement des messages dans cassandra
+             */
+
             // Collection of vertices (contains users)
             var collectionVertices = new ArrayBuffer[(Long, String)]()
 
@@ -482,159 +476,124 @@ object FinalProject {
                 }
             }
 
+            /**
+             * Initialisation du graph
+             */
+
             // Empty graph at first launch
-            if(stockGraph == null ){
+            if (stockGraph == null) {
                 // Convert vertices to RDD
                 val VerticesRDD = ru ArrayToVertices(sc, collectionVertices)
 
                 // Convert it to RDD
                 val EdgeRDD = ru ArrayToEdges(sc, collectionEdge)
 
-                //stockGraph.unpersist()
                 stockGraph = Graph(VerticesRDD, EdgeRDD)
                 stockGraph.unpersist()
                 stockGraph.persist(StorageLevel.MEMORY_AND_DISK)
-
             }
 
-            //val path = "./people.json"
-            //val sqlContext = new org.apache.spark.sql.SQLContext(sc)
+            /**
+             * Ajout des nouveaux Edges et Vertices dans le graph principal
+             */
 
-            //val anotherPeople = sqlContext.
+            time {
+                stockGraph = Graph(stockGraph.vertices.union(sc.parallelize(collectionVertices)), stockGraph.edges.union(sc.parallelize(collectionEdge)))
+            }
 
-
-
-
-            time { stockGraph = Graph(stockGraph.vertices.union(sc.parallelize(collectionVertices)), stockGraph.edges.union(sc.parallelize(collectionEdge))) }
+            println("TOTAL EDGES : " + stockGraph.edges.count())
+            println("TOTAL VERTICES : " + stockGraph.vertices.count())
 
             collectionVertices = new ArrayBuffer[(Long, String)]()
             collectionEdge = new ArrayBuffer[Edge[String]]()
 
-            //println("Comm saved in cassandra: " + stockGraph.vertices.collect().length)
-            //time { println("Graph : " + stockGraph.vertices.collect().length + " Vertices and " + stockGraph.edges.collect().length + " edges") }
-            //stockGraph.vertices.collect().foreach(println(_))
-            //stockGraph.edges.collect().foreach(println(_))
+
+            /**
+             * Split main Graph in multiples communities
+             */
+
+            counter += 1
 
             val communityGraph = time {
                 comUtils splitCommunity(stockGraph, stockGraph.vertices, false)
             }
 
-            //communityGraph.edges.saveAsTextFile("./edges"+counter+".json")
+            val (subgraphs, commIDs) = time {
+                comUtils subgraphCommunities2(communityGraph, stockGraph.vertices, false)
+            }
 
-            //communityGraph.edges.coalesce(1,true).saveAsTextFile("edges"+counter+".json")
+            /**
+             * LDA
+             */
 
+            var cpt = 0
+            for (sub <- subgraphs) {
 
-            //sc.parallelize(Seq("zgeg", "anus")).coalesce(1,true).repartition(1).saveAsTextFile("edges"+counter+".json")
+                // Store cosine calculus
+                var tabcosine = new ArrayBuffer[Double]()
 
-            //val mapper = new ObjectMapper() with ScalaObjectMapper
-
-            //communityGraph.edges.coalesce(1,true).map(mapper.writeValueAsString(_)).saveAsTextFile("edges"+counter+".json")
-
-            //val connn  = communityGraph.edges.collect()
-
-            //connn.map(_).saveAsTextFile("./edges"+counter+".json")
-
-            counter += 1
-
-            //if (counter % 5 == 0){
-            val (subgraphs, commIDs) = time { comUtils subgraphCommunities2(communityGraph, stockGraph.vertices, false) }
-
-
-            // LDA pour chaque communautés
-            // Puis stockage dans cassandra
-            for (sub <- subgraphs){
-
-                var T = counter
-                var cpt = 0
-                var idComm = commIDs(cpt)
-                var SG = cpt
+                // Init variable for cassandra
+                val T = counter
+                val idComm = commIDs(cpt)
+                val SG = cpt
                 currentTweets = ""
 
-                println("\nsubgraph: " + counter + "cpt: "+ cpt)
+                println("\nsubgraph: " + counter + "cpt: " + cpt)
 
-                //textBuffer.foreach(println(_))
-                //textBuffer.foreach(println(_))
-
-                // On prends tous les texts des tweets recu
-                for (v <- sub.edges)
-                {
-                    println("id: " + v.attr)
-
-                    if(textBuffer.keys.exists(_.toString == v.attr.toString)){
-                        result +=  textBuffer.get(v.attr.toString).toString.replaceAll("[!?.,:;<>)(]", " ")
+                // Store tweet's text in result
+                for (v <- sub.edges) {
+                    if (textBuffer.keys.exists(_.toString == v.attr.toString)) {
+                        result += textBuffer.get(v.attr.toString).toString.replaceAll("[!?.,:;<>)(]", " ")
                     }
                 }
 
-                result.foreach(println(_))
-
-                println("Taille du tab result: " + result.size)
-
-
+                /**
+                 * LDA
+                 */
 
                 if (result.nonEmpty) {
 
                     // On les convertis en RDD avant de les passé au LDA
-                    val textTweet = sc.parallelize(result).cache()
-
-                    val tweetsMerge:String = ""
+                    //val textTweet = sc.parallelize(result).cache()
 
                     println("Tweets by tweets -> Create documents and vocabulary")
-                    textTweet.foreach(x => {
+
+                    result.foreach(x => {
 
                         val tweet = x
                             .toLowerCase.split("\\s")
                             .filter(_.length > 3)
                             .filter(_.forall(java.lang.Character.isLetter))
 
-                       if (tweet.length > 1) {
-                           //dictionnary += tweet
-                           for (t <- tweet){
-                               dictionnary += t
-                           }
-
-                           currentTweets = currentTweets.concat(tweet.mkString(" "))
-                           println("après concat : " + tweet.mkString(" ") + "res : " + currentTweets)
-                       }
-
-
-                        /*for (t <- tweet.split(" ")){
-                            currentTweets
-                        }*/
-
-
+                        if (tweet.length > 1) {
+                            for (t <- tweet) {
+                                dictionnary += t
+                            }
+                            currentTweets = currentTweets.concat(tweet.mkString(" "))
+                        }
                     })
 
-                    /*for (t <- tweet){
-                        dictionnary += t
-                    }
-                    tweetsMerge.concat(x)*/
-                    println("avant")
-                    println(currentTweets)
-                    println("avant")
                     var tab1 = new ArrayBuffer[Double]
                     var tab2 = new ArrayBuffer[Double]
-
-                    var tabcosine = new ArrayBuffer[Double]
 
 
                     // LDA for initial corpus
                     println("Creation du contenu")
 
-
                     val dictDistinct = dictionnary.distinct
-
 
                     // Create document
                     println("Creation du document")
                     val (res1: Seq[(Long, Vector)], res2: Array[String]) = createdoc(dictDistinct, currentTweets)
 
-                    res2.foreach(println(_))
+
                     // Start LDA
                     println("LDA Started")
                     ldaModel = lda.run(ssc.sparkContext.parallelize(res1).cache())
                     ldaModel = time {
                         mu findTopics(ldaModel, res2, numWordsByTopics, true)
                     }
+
                     println("LDA Finished\nDisplay results")
                     val topicIndices = ldaModel.describeTopics(3)
                     topicIndices.foreach { case (terms, termWeights) =>
@@ -644,7 +603,7 @@ object FinalProject {
                         }
 
                         // Store every cosine similarity
-                        tabcosine += cosineSimilarity(tab1, tab2)
+                        tabcosine += cosineSimilarity(tab1, tab2).toDouble
 
                         // Reset array
                         tab1 = new ArrayBuffer[Double]
@@ -658,22 +617,20 @@ object FinalProject {
                     ldaModel.describeTopics(6).apply(biggestCosineIndex)._1.foreach { x =>
                         println(res2(x))
                     }
-
-                    tabcosine = new ArrayBuffer[Double]
                 }
 
                 // Pour chaques edges . On crée un Seq
-                /*for (v <- sub.edges)
-                    {
+                for (v <- sub.edges) {
+                    println("T:" + T + " SG:" + SG + " IDCOM:" + idComm + " srcID:" + v.srcId + " dstID:" + v.dstId + " attr:" + v.attr + "LDA:" + tabcosine.mkString(";"))
+                }
 
-                    }*/
-
-                cpt+=1
+                cpt += 1
                 result.clear()
             }
 
             textBuffer.clear()
 
+            // Enregistrement sur fichier JSON ( selon des fichiers )
             /*for (sub <- subgraphs) {
                 val outputRDD = sub.edges.coalesce(1, shuffle = true).map(gson.toJson(_))
                 val uri: URI = new URI(s"/home/mcaraccio/json/" + counter.toString + "/edges")
@@ -819,6 +776,7 @@ object FinalProject {
 
         */
     }
+
     /**
      * @constructor murmurHash64A
      *
@@ -875,7 +833,7 @@ object FinalProject {
 
     }
 
-    def createdoc(tokenizedCorpus:ArrayBuffer[String] ,x: String): ((Seq[(Long, Vector)], Array[String])) = {
+    def createdoc(tokenizedCorpus: ArrayBuffer[String], x: String): ((Seq[(Long, Vector)], Array[String])) = {
         /*val tokenizedCorpus: Seq[String] =
             dict.map(_.toLowerCase.split("\\s")).flatMap(_.filter(_.length > 3).filter(_.forall(java.lang.Character.isLetter))).toSeq
 */
@@ -883,9 +841,9 @@ object FinalProject {
         dict.map(_.toLowerCase.split("\\s")).flatMap(_.filter(_.length > 3).filter(_.forall(java.lang.Character.isLetter))).foreach(println(_))
         println("tokenizedCorpus")*/
         val tokenizedTweet: Seq[String] = x.split(" ").toSeq
-        println("tokenizedTweet finished")
+        //println("tokenizedTweet finished")
 
-        tokenizedTweet.foreach(println(_))
+        //tokenizedTweet.foreach(println(_))
 
         // Choose the vocabulary
         // termCounts: Sorted list of (term, termCount) pairs
@@ -901,24 +859,14 @@ object FinalProject {
 
         // Map[String, Int] of words and theirs places in tweet
         val vocab: Map[String, Int] = tokenizedCorpus.zipWithIndex.toMap
-        println("vocab finished")
-        println("vsize:" + vocab.size)
-        vocab.foreach(println(_))
+        //println("vocab finished")
+        //println("vsize:" + vocab.size)
+        //vocab.foreach(println(_))
 
         // MAP : [ Word ID , VECTOR [vocab.size, WordFrequency]]
         val documents: Map[Long, Vector] =
             vocab.map { case (tokens, id) =>
-                println("token: " +  tokens + " id: " + id)
                 val counts = new mutable.HashMap[Int, Double]()
-                //println(documents.size)
-
-                println("TOKEN ACTUEL: " + tokens)
-                if(tokenizedTweet.contains(tokens)){
-                    println(tokenizedTweet.count(_ == tokens))
-                }
-                else{
-                    println("pas trouvéé")
-                }
 
                 // Word ID
                 val idx = vocab(tokens)
@@ -930,7 +878,7 @@ object FinalProject {
                 (id.toLong, Vectors.sparse(vocab.size, counts.toSeq))
             }
 
-        documents.foreach(println(_))
+        //documents.foreach(println(_))
 
 
         (documents.toSeq, tokenizedCorpus.toArray)
