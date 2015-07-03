@@ -10,7 +10,7 @@ import scala.math._
 import com.google.gson.Gson
 import java.net.URI
 import org.apache.hadoop.fs.{FileUtil, Path, FileSystem}
-
+import scala.util.control._
 
 import org.apache.commons.io.FilenameUtils
 import org.apache.commons.lang.StringEscapeUtils
@@ -52,7 +52,11 @@ object FinalProject {
     var lda: LDA = null
     //var vocab: Map[String, Int] = null
 
+    // Result will be stored in an array
+    var result = new ArrayBuffer[String]
+
     var stockGraph:Graph[String, String] = null
+    var currentTweets:String = ""
 
     var counter = 0
 
@@ -363,6 +367,48 @@ object FinalProject {
             )
         }
 
+        // ************************************************************
+        // Save tweet's informations in Cassandra
+        // ************************************************************
+        tweetsStream.foreachRDD(rdd => {
+            println("tweetsStream")
+            // Getting current context
+            val currentContext = rdd.context
+
+            // RDD -> Array()
+            val tabValues = rdd.collect()
+
+            /*var test = rdd.map{status => (status._1,
+                                          status._2,
+                                          patternURL.replaceAllIn(status._3, ""),
+                                          status._4,
+                                          status._5,
+                                          status._6,
+                                          status._7)}*/
+
+            // For each tweets in RDD
+            for (item <- tabValues.toArray) {
+
+                // New tweet value
+                var newTweet = patternURL.replaceAllIn(item._6, "")
+                newTweet = patternSmiley.replaceAllIn(newTweet, "")
+
+                val collection = currentContext.parallelize(Seq((item._1, item._2, item._3, item._4, item._5, newTweet)))
+
+                /*collection.saveToCassandra(
+                    "twitter",
+                    "tweet_filtered",
+                    SomeColumns("tweet_id",
+                        "user_twitter_id",
+                        "user_local_id",
+                        "tweet_create_at",
+                        "tweet_retweet",
+                        "tweet_text"
+                    ))*/
+            }
+
+            println("Tweets saved : " + rdd.count())
+        })
 
         // ************************************************************
         // Save user's informations in Cassandra
@@ -386,6 +432,10 @@ object FinalProject {
             // Collection of edges (contains communications between users)
             var collectionEdge = new ArrayBuffer[Edge[String]]()
 
+            //var textBuffer = new ArrayBuffer[(String, String)]
+            var textBuffer = collection.mutable.Map[String, String]()
+
+
             // For each tweets in RDD
             for (item <- rdd.cache().collect()) {
 
@@ -399,6 +449,9 @@ object FinalProject {
                     val sendID: Long = abs(gu murmurHash64A item._3.getBytes)
 
                     collectionVertices += ((sendID, item._3))
+
+                    textBuffer += (item._1 -> item._5)
+
 
                     // For each receiver in tweet
                     matches.foreach { destName => {
@@ -486,6 +539,141 @@ object FinalProject {
             //if (counter % 5 == 0){
             val (subgraphs, commIDs) = time { comUtils subgraphCommunities2(communityGraph, stockGraph.vertices, false) }
 
+
+            // LDA pour chaque communautés
+            // Puis stockage dans cassandra
+            for (sub <- subgraphs){
+
+                var T = counter
+                var cpt = 0
+                var idComm = commIDs(cpt)
+                var SG = cpt
+                currentTweets = ""
+
+                println("\nsubgraph: " + counter + "cpt: "+ cpt)
+
+                //textBuffer.foreach(println(_))
+                //textBuffer.foreach(println(_))
+
+                // On prends tous les texts des tweets recu
+                for (v <- sub.edges)
+                {
+                    println("id: " + v.attr)
+
+                    if(textBuffer.keys.exists(_.toString == v.attr.toString)){
+                        result +=  textBuffer.get(v.attr.toString).toString.replaceAll("[!?.,:;<>)(]", " ")
+                    }
+                }
+
+                result.foreach(println(_))
+
+                println("Taille du tab result: " + result.size)
+
+
+
+                if (result.nonEmpty) {
+
+                    // On les convertis en RDD avant de les passé au LDA
+                    val textTweet = sc.parallelize(result).cache()
+
+                    val tweetsMerge:String = ""
+
+                    println("Tweets by tweets -> Create documents and vocabulary")
+                    textTweet.foreach(x => {
+
+                        val tweet = x
+                            .toLowerCase.split("\\s")
+                            .filter(_.length > 3)
+                            .filter(_.forall(java.lang.Character.isLetter))
+
+                       if (tweet.length > 1) {
+                           //dictionnary += tweet
+                           for (t <- tweet){
+                               dictionnary += t
+                           }
+
+                           currentTweets = currentTweets.concat(tweet.mkString(" "))
+                           println("après concat : " + tweet.mkString(" ") + "res : " + currentTweets)
+                       }
+
+
+                        /*for (t <- tweet.split(" ")){
+                            currentTweets
+                        }*/
+
+
+                    })
+
+                    /*for (t <- tweet){
+                        dictionnary += t
+                    }
+                    tweetsMerge.concat(x)*/
+                    println("avant")
+                    println(currentTweets)
+                    println("avant")
+                    var tab1 = new ArrayBuffer[Double]
+                    var tab2 = new ArrayBuffer[Double]
+
+                    var tabcosine = new ArrayBuffer[Double]
+
+
+                    // LDA for initial corpus
+                    println("Creation du contenu")
+
+
+                    val dictDistinct = dictionnary.distinct
+
+
+                    // Create document
+                    println("Creation du document")
+                    val (res1: Seq[(Long, Vector)], res2: Array[String]) = createdoc(dictDistinct, currentTweets)
+
+                    res2.foreach(println(_))
+                    // Start LDA
+                    println("LDA Started")
+                    ldaModel = lda.run(ssc.sparkContext.parallelize(res1).cache())
+                    ldaModel = time {
+                        mu findTopics(ldaModel, res2, numWordsByTopics, true)
+                    }
+                    println("LDA Finished\nDisplay results")
+                    val topicIndices = ldaModel.describeTopics(3)
+                    topicIndices.foreach { case (terms, termWeights) =>
+                        terms.zip(termWeights).foreach { case (term, weight) =>
+                            tab1 += res1.filter(x => x._1 == term).head._2.apply(term)
+                            tab2 += weight
+                        }
+
+                        // Store every cosine similarity
+                        tabcosine += cosineSimilarity(tab1, tab2)
+
+                        // Reset array
+                        tab1 = new ArrayBuffer[Double]
+                        tab2 = new ArrayBuffer[Double]
+                    }
+
+                    val biggestCosineIndex: Int = tabcosine.indexOf(tabcosine.max)
+                    println("Most similarity found with this topic: " + tabcosine(biggestCosineIndex))
+                    println("Topic words : ")
+
+                    ldaModel.describeTopics(6).apply(biggestCosineIndex)._1.foreach { x =>
+                        println(res2(x))
+                    }
+
+                    tabcosine = new ArrayBuffer[Double]
+                }
+
+                // Pour chaques edges . On crée un Seq
+                /*for (v <- sub.edges)
+                    {
+
+                    }*/
+
+                cpt+=1
+                result.clear()
+            }
+
+            textBuffer.clear()
+
             /*for (sub <- subgraphs) {
                 val outputRDD = sub.edges.coalesce(1, shuffle = true).map(gson.toJson(_))
                 val uri: URI = new URI(s"/home/mcaraccio/json/" + counter.toString + "/edges")
@@ -505,48 +693,7 @@ object FinalProject {
         })
 
 
-        // ************************************************************
-        // Save tweet's informations in Cassandra
-        // ************************************************************
-        tweetsStream.foreachRDD(rdd => {
 
-            // Getting current context
-            val currentContext = rdd.context
-
-            // RDD -> Array()
-            val tabValues = rdd.collect()
-
-            /*var test = rdd.map{status => (status._1,
-                                          status._2,
-                                          patternURL.replaceAllIn(status._3, ""),
-                                          status._4,
-                                          status._5,
-                                          status._6,
-                                          status._7)}*/
-
-            // For each tweets in RDD
-            for (item <- tabValues.toArray) {
-
-                // New tweet value
-                var newTweet = patternURL.replaceAllIn(item._6, "")
-                newTweet = patternSmiley.replaceAllIn(newTweet, "")
-
-                val collection = currentContext.parallelize(Seq((item._1, item._2, item._3, item._4, item._5, newTweet)))
-
-                /*collection.saveToCassandra(
-                    "twitter",
-                    "tweet_filtered",
-                    SomeColumns("tweet_id",
-                        "user_twitter_id",
-                        "user_local_id",
-                        "tweet_create_at",
-                        "tweet_retweet",
-                        "tweet_text"
-                    ))*/
-            }
-
-            println("Tweets saved : " + rdd.count())
-        })
 
         ssc.start()
         ssc.awaitTermination()
@@ -738,6 +885,8 @@ object FinalProject {
         val tokenizedTweet: Seq[String] = x.split(" ").toSeq
         println("tokenizedTweet finished")
 
+        tokenizedTweet.foreach(println(_))
+
         // Choose the vocabulary
         // termCounts: Sorted list of (term, termCount) pairs
         // http://stackoverflow.com/questions/15487413/scala-beginners-simplest-way-to-count-words-in-file
@@ -748,18 +897,29 @@ object FinalProject {
         // vocabArray contains all distinct words
         val vocabArray: Array[String] = termCounts.takeRight(termCounts.length - numStopwords).map(_._1)
 */
+        //val tokenizedCorpusSplit = tokenizedCorpus
 
         // Map[String, Int] of words and theirs places in tweet
         val vocab: Map[String, Int] = tokenizedCorpus.zipWithIndex.toMap
         println("vocab finished")
         println("vsize:" + vocab.size)
-        //vocab.foreach(println(_))
+        vocab.foreach(println(_))
 
         // MAP : [ Word ID , VECTOR [vocab.size, WordFrequency]]
         val documents: Map[Long, Vector] =
             vocab.map { case (tokens, id) =>
+                println("token: " +  tokens + " id: " + id)
                 val counts = new mutable.HashMap[Int, Double]()
                 //println(documents.size)
+
+                println("TOKEN ACTUEL: " + tokens)
+                if(tokenizedTweet.contains(tokens)){
+                    println(tokenizedTweet.count(_ == tokens))
+                }
+                else{
+                    println("pas trouvéé")
+                }
+
                 // Word ID
                 val idx = vocab(tokens)
 
@@ -770,7 +930,7 @@ object FinalProject {
                 (id.toLong, Vectors.sparse(vocab.size, counts.toSeq))
             }
 
-        //documents.foreach(println(_))
+        documents.foreach(println(_))
 
 
         (documents.toSeq, tokenizedCorpus.toArray)
