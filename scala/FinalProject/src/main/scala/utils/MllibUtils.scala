@@ -1,5 +1,6 @@
 package utils
 
+import com.datastax.spark.connector.SomeColumns
 import org.apache.spark.SparkContext
 import org.apache.spark.mllib.clustering.{LDA, _}
 import org.apache.spark.mllib.linalg.{Vector, Vectors}
@@ -164,24 +165,38 @@ class MllibUtils(/*_dictionnary: ArrayBuffer[String], _currentTweet: ArrayBuffer
      *
      * @return LDAModel
      */
-    def findTopics(ldaModel: LDAModel, vocabArray: Array[String], numWordsByTopics: Int, displayResult: Boolean): LDAModel = {
+    def findTopics(ldaModel: LDAModel, vocabArray: Array[String], T:Int, SG:Int, numWordsByTopics: Int, displayResult: Boolean): Seq[(String,String,String,String)] = {
 
         println(color("\nCall findTopics", RED))
 
         println("Learned topics (as distributions over vocab of " + ldaModel.vocabSize + " words):")
 
+        val topicIndices = ldaModel.describeTopics(maxTermsPerTopic = numWordsByTopics)
+
+        var it = 0
+        var seqC = List[(String,String,String,String)]()
+
         // Print topics, showing top-weighted x terms for each topic.
         if (displayResult) {
-            val topicIndices = ldaModel.describeTopics(maxTermsPerTopic = numWordsByTopics)
             topicIndices.foreach { case (terms, termWeights) =>
                 println("TOPICS:")
+
+                var tabTopics= new ArrayBuffer[String]()
+
                 terms.zip(termWeights).foreach { case (term, weight) =>
                     println(s"${vocabArray(term.toInt)}\t\t$weight")
+                    tabTopics += vocabArray(term.toInt)
                 }
+
+                seqC = seqC :+ (T.toString, SG.toString, it.toString, tabTopics.mkString(";"))
+
+                //println("T: " + T + " SG: " + SG + "TopicN: " + it + " c: " + tabTopics.mkString(";"))
+                it += 1
+
                 println()
             }
         }
-        ldaModel
+        seqC.toSeq
     }
 
     /**
