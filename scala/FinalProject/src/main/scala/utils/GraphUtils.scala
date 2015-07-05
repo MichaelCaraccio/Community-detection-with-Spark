@@ -6,7 +6,7 @@ import org.apache.spark.graphx._
 import org.apache.spark.rdd.RDD
 
 
-class GraphUtils {
+class GraphUtils extends serializable{
 
     val RED = "\033[1;30m"
     val ENDC = "\033[0m"
@@ -14,7 +14,6 @@ class GraphUtils {
 
     /**
      * @constructor murmurHash64A
-     *
      *
      * @param
      * @param
