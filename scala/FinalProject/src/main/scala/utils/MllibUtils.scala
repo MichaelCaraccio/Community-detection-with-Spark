@@ -1,14 +1,9 @@
 package utils
 
-import com.datastax.spark.connector.SomeColumns
-import org.apache.spark.SparkContext
-import org.apache.spark.mllib.clustering.{LDA, _}
-import org.apache.spark.mllib.linalg.{Vector, Vectors}
+import org.apache.spark.mllib.clustering._
 import org.apache.spark.rdd.RDD
 
-import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
-import org.apache.spark.sql.{DataFrame, Strategy, SQLContext, SchemaRDD}
 
 /**
  * Topic models automatically infer the topics discussed in a collection of documents. These topics can be used
@@ -17,7 +12,7 @@ import org.apache.spark.sql.{DataFrame, Strategy, SQLContext, SchemaRDD}
  *
  * LDA is not given topics, so it must infer them from raw text. LDA defines a topic as a distribution over words.
  */
-class MllibUtils(/*_dictionnary: ArrayBuffer[String], _currentTweet: ArrayBuffer[String])*/){
+class MllibUtils(/*_dictionnary: ArrayBuffer[String], _currentTweet: ArrayBuffer[String])*/) {
 
     // Text Color
     val RED = "\033[1;30m"
@@ -165,7 +160,7 @@ class MllibUtils(/*_dictionnary: ArrayBuffer[String], _currentTweet: ArrayBuffer
      *
      * @return LDAModel
      */
-    def findTopics(ldaModel: LDAModel, vocabArray: Array[String], T:Int, SG:Int, numWordsByTopics: Int, displayResult: Boolean): Seq[(String,String,String,String)] = {
+    def findTopics(ldaModel: LDAModel, vocabArray: Array[String], T: Int, SG: Int, numWordsByTopics: Int, displayResult: Boolean): Seq[(String, String, String, String)] = {
 
         println(color("\nCall findTopics", RED))
 
@@ -174,21 +169,21 @@ class MllibUtils(/*_dictionnary: ArrayBuffer[String], _currentTweet: ArrayBuffer
         val topicIndices = ldaModel.describeTopics(maxTermsPerTopic = numWordsByTopics)
 
         var it = 0
-        var seqC = List[(String,String,String,String)]()
+        var seqC = List[(String, String, String, String)]()
 
         // Print topics, showing top-weighted x terms for each topic.
         if (displayResult) {
             topicIndices.foreach { case (terms, termWeights) =>
                 println("TOPICS:")
 
-                var tabTopics= new ArrayBuffer[String]()
+                var tabTopics = new ArrayBuffer[String]()
 
                 terms.zip(termWeights).foreach { case (term, weight) =>
                     println(s"${vocabArray(term.toInt)}\t\t$weight")
                     tabTopics += vocabArray(term.toInt)
                 }
 
-                seqC = seqC :+ (T.toString, SG.toString, it.toString, tabTopics.mkString(";"))
+                seqC = seqC :+(T.toString, SG.toString, it.toString, tabTopics.mkString(";"))
 
                 //println("T: " + T + " SG: " + SG + "TopicN: " + it + " c: " + tabTopics.mkString(";"))
                 it += 1
@@ -278,67 +273,67 @@ class MllibUtils(/*_dictionnary: ArrayBuffer[String], _currentTweet: ArrayBuffer
      *
      * @return RDD[(Long, Vector)] and Array[String] : documentsRDD and array of vocabulary
      */
-   /* def createDocumentsCON(totalcorpus : RDD[String], numStopwords: Int): (Seq[(Long, Vector)], Array[String]) = {
+    /* def createDocumentsCON(totalcorpus : RDD[String], numStopwords: Int): (Seq[(Long, Vector)], Array[String]) = {
 
-        println(color("\nCall createDocuments", RED))
+         println(color("\nCall createDocuments", RED))
 
-        // Split every tweets's text into terms (words) and then remove :
-        // -> (a) non-alphabetic terms
-        // -> (b) short terms with < 4 characters
-        // -> (c) to lower
-        val tokenizedCorpus: RDD[Seq[String]] =
-            totalcorpus.map(_.toLowerCase.split("\\s")).map(_.filter(_.length > 3).filter(_.forall(java.lang.Character.isLetter)))
-
-
-        for(corpus <- totalcorpus){
-
-            // Split tweet's text into terms (words) and then remove :
-            // -> (a) non-alphabetic terms
-            // -> (b) short terms with < 4 characters
-            // -> (c) to lower
-            //val tokenizedTweet =
-            //    corpus.map(_.toLowerCase.split("\\s")).map(_.filter(_.length > 3).filter(_.forall(java.lang.Character.isLetter)))
-            val tokenizedTweet = corpus.toLowerCase.split("\\s").filter(_.length > 3).filter(_.forall(java.lang.Character.isLetter))
-
-            // Choose the vocabulary
-            //   termCounts: Sorted list of (term, termCount) pairs
-            val termCounts: Array[(String, Long)] = tokenizedCorpus.flatMap(_.map(_ -> 1L)).reduceByKey(_ + _).collect().sortBy(-_._2)
-
-            // vocabArray contains all distinct words
-            val vocabArray: Array[String] = termCounts.takeRight(termCounts.length - numStopwords).map(_._1)
+         // Split every tweets's text into terms (words) and then remove :
+         // -> (a) non-alphabetic terms
+         // -> (b) short terms with < 4 characters
+         // -> (c) to lower
+         val tokenizedCorpus: RDD[Seq[String]] =
+             totalcorpus.map(_.toLowerCase.split("\\s")).map(_.filter(_.length > 3).filter(_.forall(java.lang.Character.isLetter)))
 
 
-            // Map[String, Int] of words and theirs places in tweet
-            val vocab: Map[String, Int] = vocabArray.zipWithIndex.toMap
-            //vocab.foreach(println(_))
+         for(corpus <- totalcorpus){
 
-            // MAP : [ Word ID , VECTOR [vocab.size, WordFrequency]]
-            val documents: Map[Long, Vector] =
-                vocab.map { case (tokens, id) =>
-                    val counts = new mutable.HashMap[Int, Double]()
+             // Split tweet's text into terms (words) and then remove :
+             // -> (a) non-alphabetic terms
+             // -> (b) short terms with < 4 characters
+             // -> (c) to lower
+             //val tokenizedTweet =
+             //    corpus.map(_.toLowerCase.split("\\s")).map(_.filter(_.length > 3).filter(_.forall(java.lang.Character.isLetter)))
+             val tokenizedTweet = corpus.toLowerCase.split("\\s").filter(_.length > 3).filter(_.forall(java.lang.Character.isLetter))
 
-                    // Word ID
-                    val idx = vocab(tokens)
+             // Choose the vocabulary
+             //   termCounts: Sorted list of (term, termCount) pairs
+             val termCounts: Array[(String, Long)] = tokenizedCorpus.flatMap(_.map(_ -> 1L)).reduceByKey(_ + _).collect().sortBy(-_._2)
 
-                    // Count word occurancy
-                    counts(idx) = counts.getOrElse(idx, 0.0) + tokenizedTweet.flatten.count(_ == tokens)
-
-                    // Return word ID and Vector
-                    (id.toLong, Vectors.sparse(vocab.size, counts.toSeq))
-                }
-
-            // Transform it to RDD
-            //val documentsRDD = sc.parallelize(documents.toSeq)
-
-            // Display RDD
-            //documentsRDD.collect().foreach(println(_))
-
-            // Return
-            (documents.toSeq, vocabArray)
-        }
+             // vocabArray contains all distinct words
+             val vocabArray: Array[String] = termCounts.takeRight(termCounts.length - numStopwords).map(_._1)
 
 
-    }*/
+             // Map[String, Int] of words and theirs places in tweet
+             val vocab: Map[String, Int] = vocabArray.zipWithIndex.toMap
+             //vocab.foreach(println(_))
+
+             // MAP : [ Word ID , VECTOR [vocab.size, WordFrequency]]
+             val documents: Map[Long, Vector] =
+                 vocab.map { case (tokens, id) =>
+                     val counts = new mutable.HashMap[Int, Double]()
+
+                     // Word ID
+                     val idx = vocab(tokens)
+
+                     // Count word occurancy
+                     counts(idx) = counts.getOrElse(idx, 0.0) + tokenizedTweet.flatten.count(_ == tokens)
+
+                     // Return word ID and Vector
+                     (id.toLong, Vectors.sparse(vocab.size, counts.toSeq))
+                 }
+
+             // Transform it to RDD
+             //val documentsRDD = sc.parallelize(documents.toSeq)
+
+             // Display RDD
+             //documentsRDD.collect().foreach(println(_))
+
+             // Return
+             (documents.toSeq, vocabArray)
+         }
+
+
+     }*/
 
     def color(str: String, col: String): String = "%s%s%s".format(col, str, ENDC)
 
@@ -346,25 +341,25 @@ class MllibUtils(/*_dictionnary: ArrayBuffer[String], _currentTweet: ArrayBuffer
         dictionnary
     }*/
 
-   /* def createAllDocs(con:DataFrame): Unit ={
-        println("suce")
-        val filsdepute = new ArrayBuffer[(RDD[(Long, Vector)], Array[String])]
-        println("sucsse")
-        for(result <- con) {
-            //result.getString(0)
-        //}
-        //for(c <- con){
-            newTweet(result.getString(0))
-            //var corpus: RDD[String] = sc.parallelize(dictionnary)
+    /* def createAllDocs(con:DataFrame): Unit ={
+         println("suce")
+         val filsdepute = new ArrayBuffer[(RDD[(Long, Vector)], Array[String])]
+         println("sucsse")
+         for(result <- con) {
+             //result.getString(0)
+         //}
+         //for(c <- con){
+             newTweet(result.getString(0))
+             //var corpus: RDD[String] = sc.parallelize(dictionnary)
 
-            filsdepute += createDocuments(corpus,0)
+             filsdepute += createDocuments(corpus,0)
 
-       }
-
-        for(fils <- filsdepute){
-            var ldaModel = lda.run(fils._1)
-            ldaModel = findTopics(ldaModel, fils._2, 5, true)
         }
-    }*/
+
+         for(fils <- filsdepute){
+             var ldaModel = lda.run(fils._1)
+             ldaModel = findTopics(ldaModel, fils._2, 5, true)
+         }
+     }*/
 
 }

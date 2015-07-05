@@ -1,4 +1,5 @@
 //import com.google.gson.Gson
+
 import org.apache.log4j.{Level, Logger}
 import org.apache.spark.graphx._
 import org.apache.spark.storage.StorageLevel
@@ -90,7 +91,7 @@ object FinalProject {
 
         // Spark configuration
         val sparkConf = new SparkConf(true)
-            .setMaster("local[16]")
+            .setMaster("local[8]")
             .setAppName("FinalProject")
             //.set("spark.driver.cores", "4")
             .set("spark.driver.maxResultSize", "0") // no limit
@@ -283,20 +284,6 @@ object FinalProject {
         // ************************************************************
         tweetsStream.foreachRDD(rdd => {
             println("tweetsStream")
-            // Getting current context
-            //val currentContext = rdd.context
-
-            // RDD -> Array()
-            //val tabValues = rdd.collect()
-
-            /*var test = rdd.map{status => (status._1,
-                                          status._2,
-                                          patternURL.replaceAllIn(status._3, ""),
-                                          status._4,
-                                          status._5,
-                                          status._6,
-                                          status._7)}*/
-
 
             // For each tweets in RDD
             for (item <- rdd) {
@@ -305,20 +292,7 @@ object FinalProject {
                 var newTweet = patternURL.replaceAllIn(item._6, "")
                 newTweet = patternSmiley.replaceAllIn(newTweet, "")
 
-                //val collection = sc.parallelize(Seq((item._1, item._2, item._3, item._4, item._5, newTweet)))
-
                 seqtweetsStream = seqtweetsStream :+(item._1, item._2, item._3.toString, item._4, item._5, newTweet)
-
-                /*collection.saveToCassandra(
-                    "twitter",
-                    "tweet_filtered",
-                    SomeColumns("tweet_id",
-                        "user_twitter_id",
-                        "user_local_id",
-                        "tweet_create_at",
-                        "tweet_retweet",
-                        "tweet_text"
-                    ))*/
             }
 
             sc.parallelize(seqtweetsStream).saveToCassandra(
@@ -332,11 +306,8 @@ object FinalProject {
                     "tweet_text"
                 ))
 
-
+            // reset
             seqtweetsStream = List[(String, String, String, String, String, String)]()
-
-
-            //println("Tweets saved : " + rdd.count())
         })
 
         // ************************************************************
@@ -380,19 +351,16 @@ object FinalProject {
                 // Avoid single @ in message
                 if (item._4 != "" && (item._6 == "en" || item._6 == "en-gb")) {
 
-                    // Find multiple dest
-                    val matches = pattern.findAllIn(item._5).toArray
-
                     // Sender ID
                     val sendID: Long = abs(murmurHash64A(item._3.getBytes))
 
+                    // Sender
                     collectionVertices += ((sendID, item._3))
 
                     textBuffer += (item._1 -> item._5)
 
-
-                    // For each receiver in tweet
-                    matches.foreach { destName => {
+                    // For each dest in tweet
+                    pattern.findAllIn(item._5).foreach { destName => {
 
                         val user_dest_name = destName.drop(1)
 
@@ -402,10 +370,6 @@ object FinalProject {
                         // Create each users and edges
                         collectionVertices += ((destID, user_dest_name))
                         collectionEdge += Edge(sendID, destID, item._1)
-
-
-                        // TODO : Optimize save to cassandra with concatenate seq and save it when the loop is over
-                        //val collection = rdd.context.parallelize(Seq((item._1, item._2, sendID, destID)))
 
                         seqcommStream = seqcommStream :+(item._1, item._2, sendID.toString, destID.toString)
 
@@ -432,6 +396,7 @@ object FinalProject {
                     "user_send_local_id",
                     "user_dest_id"))
 
+            // reset
             seqcommStream = List[(String, String, String, String)]()
 
             /**
@@ -460,7 +425,7 @@ object FinalProject {
             }
 
             println("TOTAL EDGES : " + stockGraph.edges.count())
-            println("TOTAL VERTICES : " + stockGraph.vertices.count())
+            //println("TOTAL VERTICES : " + stockGraph.vertices.count())
 
             collectionVertices = new ArrayBuffer[(Long, String)]()
             collectionEdge = new ArrayBuffer[Edge[String]]()
@@ -580,9 +545,9 @@ object FinalProject {
                     println("Most similarity found with this topic: " + tabcosine(biggestCosineIndex))
                     println("Topic words : ")
 
-                    ldaModel.describeTopics(6).apply(biggestCosineIndex)._1.foreach { x =>
+                    /*ldaModel.describeTopics(6).apply(biggestCosineIndex)._1.foreach { x =>
                         println(res2(x))
-                    }
+                    }*/
                 }
 
                 if (result.nonEmpty) {

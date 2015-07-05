@@ -6,7 +6,7 @@ import org.apache.spark.graphx._
 import org.apache.spark.rdd.RDD
 
 
-class GraphUtils extends serializable{
+class GraphUtils extends serializable {
 
     val RED = "\033[1;30m"
     val ENDC = "\033[0m"
@@ -61,6 +61,8 @@ class GraphUtils extends serializable{
         println(ranksByUsername.collect().sortBy(_._3).reverse.mkString("\n"))
     }
 
+    def color(str: String, col: String): String = "%s%s%s".format(col, str, ENDC)
+
     /**
      * @constructor inAndOutDegrees
      *
@@ -98,6 +100,4 @@ class GraphUtils extends serializable{
             case (id, u) => println(s"User $id is called ${u.name} and received ${u.inDeg} tweets and send ${u.outDeg}.")
         }
     }
-
-    def color(str: String, col: String): String = "%s%s%s".format(col, str, ENDC)
 }
