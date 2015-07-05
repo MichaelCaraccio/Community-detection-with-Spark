@@ -389,15 +389,8 @@ object FinalProject {
 
                         //seqcommStream = seqcommStream :+(item._1, item._2, sendID.toString, destID.toString)
                         seqcommStream.append((item._1, item._2, sendID.toString, destID.toString))
-                        /*collection.saveToCassandra(
-                            "twitter",
-                            "users_communicate",
-                            SomeColumns(
-                                "tweet_id",
-                                "user_send_twitter_id",
-                                "user_send_local_id",
-                                "user_dest_id"))*/
-                    }
+
+                        }
                     }
                 }
             }
