@@ -22,6 +22,8 @@ import org.apache.spark.mllib.linalg.{Vector, Vectors}
 
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
+import scala.collection.mutable.ListBuffer
+
 import scala.util.matching.Regex
 
 // To make some of the examples work we will also need RDD
@@ -47,9 +49,9 @@ object FinalProject {
     var stockGraph: Graph[String, String] = null
     var currentTweets: String = ""
 
-    var seqcommunities = List[(String, String, String, String, String, String, String)]()
-    var seqtweetsStream = List[(String, String, String, String, String, String)]()
-    var seqcommStream = List[(String, String, String, String)]()
+    var seqcommunities = new ListBuffer[(String, String, String, String, String, String, String)]()
+    var seqtweetsStream = new ListBuffer[(String, String, String, String, String, String)]()
+    var seqcommStream = new ListBuffer[(String, String, String, String)]()
 
     // Collection of vertices (contains users)
     var collectionVertices = new ArrayBuffer[(Long, String)]()
@@ -122,7 +124,7 @@ object FinalProject {
         System.setProperty("twitter4j.oauth.accessToken", tc.getaccessToken())
         System.setProperty("twitter4j.oauth.accessTokenSecret", tc.getaccessTokenSecret())
 
-        val ssc = new StreamingContext(sparkConf, Seconds(60))
+        val ssc = new StreamingContext(sparkConf, Seconds(30))
         val stream = TwitterUtils.createStream(ssc, None, words)
 
         // Init SparkContext
@@ -279,10 +281,22 @@ object FinalProject {
             )
         }
 
+
+
+
+
+
+
+
+
+
+
+
+
         // ************************************************************
         // Save tweet's informations in Cassandra
         // ************************************************************
-        tweetsStream.foreachRDD(rdd => {
+        tweetsStream.persist(StorageLevel.MEMORY_AND_DISK).foreachRDD(rdd => {
             println("tweetsStream")
 
             // For each tweets in RDD
@@ -292,7 +306,8 @@ object FinalProject {
                 var newTweet = patternURL.replaceAllIn(item._6, "")
                 newTweet = patternSmiley.replaceAllIn(newTweet, "")
 
-                seqtweetsStream = seqtweetsStream :+(item._1, item._2, item._3.toString, item._4, item._5, newTweet)
+                //seqtweetsStream = seqtweetsStream :+(item._1, item._2, item._3.toString, item._4, item._5, newTweet)
+                seqtweetsStream.append((item._1, item._2, item._3.toString, item._4, item._5, newTweet))
             }
 
             sc.parallelize(seqtweetsStream).saveToCassandra(
@@ -307,13 +322,14 @@ object FinalProject {
                 ))
 
             // reset
-            seqtweetsStream = List[(String, String, String, String, String, String)]()
+            seqtweetsStream.clear()
+            //seqtweetsStream = new ListBuffer[(String, String, String, String, String, String)]()
         })
 
         // ************************************************************
         // Save user's informations in Cassandra
         // ************************************************************
-        usersStream.foreachRDD(rdd => {
+        usersStream.persist(StorageLevel.MEMORY_AND_DISK).foreachRDD(rdd => {
             //rdd.saveToCassandra("twitter", "user_filtered", SomeColumns("user_twitter_id", "user_local_id", "user_name", "user_lang", "user_follow_count", "user_friends_count", "user_screen_name", "user_status_count"))
 
             //println("Users saved : " + rdd.count())
@@ -322,7 +338,7 @@ object FinalProject {
         // ************************************************************
         // Save communication's informations in Cassandra
         // ************************************************************
-        commStream.foreachRDD(rdd => {
+        commStream.persist(StorageLevel.MEMORY_AND_DISK).foreachRDD(rdd => {
 
             println("commstream appelé")
 
@@ -331,7 +347,7 @@ object FinalProject {
              */
 
             // For each tweets in RDD
-            for (item <- rdd.cache()) {
+            for (item <- rdd) {
 
                 def murmurHash64A(data: Seq[Byte], seed: Long = defaultSeed): Long = {
                     val m = 0xc6a4a7935bd1e995L
@@ -371,8 +387,8 @@ object FinalProject {
                         collectionVertices += ((destID, user_dest_name))
                         collectionEdge += Edge(sendID, destID, item._1)
 
-                        seqcommStream = seqcommStream :+(item._1, item._2, sendID.toString, destID.toString)
-
+                        //seqcommStream = seqcommStream :+(item._1, item._2, sendID.toString, destID.toString)
+                        seqcommStream.append((item._1, item._2, sendID.toString, destID.toString))
                         /*collection.saveToCassandra(
                             "twitter",
                             "users_communicate",
@@ -397,7 +413,9 @@ object FinalProject {
                     "user_dest_id"))
 
             // reset
-            seqcommStream = List[(String, String, String, String)]()
+            seqcommStream.clear()
+            println("seqcommStream: " + seqcommStream.size)
+            //seqcommStream = new ListBuffer[(String, String, String, String)]()
 
             /**
              * Initialisation du graph
@@ -456,9 +474,6 @@ object FinalProject {
                 var tabcosine = new ArrayBuffer[Double]()
 
                 // Init variable for cassandra
-                val T = counter
-                val idComm = commIDs(cpt)
-                val SG = cpt
                 currentTweets = ""
 
                 // Store tweet's text in result
@@ -477,7 +492,6 @@ object FinalProject {
                     // Storage for cosines Similarity
                     var tab1 = new ArrayBuffer[Double]
                     var tab2 = new ArrayBuffer[Double]
-
 
                     println("Tweets by tweets -> Create documents and vocabulary")
 
@@ -512,7 +526,7 @@ object FinalProject {
                     ldaModel = lda.run(ssc.sparkContext.parallelize(res1).cache())
                     //val seqC = Seq[(String,String,String)]()
 
-                    val seqC: Seq[(String, String, String, String)] = mu findTopics(ldaModel, res2, T, SG, numWordsByTopics, false)
+                    val seqC: Seq[(String, String, String, String)] = mu findTopics(ldaModel, res2, counter, cpt, numWordsByTopics, false)
 
                     //seqC.foreach(println(_))
                     // Save to cassandra
@@ -541,9 +555,11 @@ object FinalProject {
                         tab2 = new ArrayBuffer[Double]
                     }
 
-                    val biggestCosineIndex: Int = tabcosine.indexOf(tabcosine.max)
-                    println("Most similarity found with this topic: " + tabcosine(biggestCosineIndex))
-                    println("Topic words : ")
+                    //val biggestCosineIndex: Int = tabcosine.indexOf(tabcosine.max)
+                    //println("Most similarity found with this topic: " + tabcosine(biggestCosineIndex))
+
+
+                    //println("Topic words : ")
 
                     /*ldaModel.describeTopics(6).apply(biggestCosineIndex)._1.foreach { x =>
                         println(res2(x))
@@ -555,7 +571,8 @@ object FinalProject {
                     for (v <- sub.edges) {
                         //println("T:" + T + " SG:" + SG + " IDCOM:" + idComm + " srcID:" + v.srcId + " dstID:" + v.dstId + " attr:" + v.attr + "LDA:" + tabcosine.mkString(";"))
 
-                        seqcommunities = seqcommunities :+(T.toString, SG.toString, idComm.toString, v.srcId.toString, v.dstId.toString, v.attr, tabcosine.mkString(";"))
+                        //seqcommunities = seqcommunities :+(counter.toString, cpt.toString, commIDs(cpt).toString, v.srcId.toString, v.dstId.toString, v.attr, tabcosine.mkString(";"))
+                        seqcommunities.append((counter.toString, cpt.toString, commIDs(cpt).toString, v.srcId.toString, v.dstId.toString, v.attr, tabcosine.mkString(";")))
                     }
 
                     //seqcommunities.foreach(println(_))
@@ -574,10 +591,9 @@ object FinalProject {
                             "lda"
                         ))*/
 
-                    seqcommunities = List[(String, String, String, String, String, String, String)]()
-
+                    seqcommunities.clear()
+                    //seqcommunities = new ListBuffer[(String, String, String, String, String, String, String)]()
                 }
-
 
                 cpt += 1
                 result.clear()
