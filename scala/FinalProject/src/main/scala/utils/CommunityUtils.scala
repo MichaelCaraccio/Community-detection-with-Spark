@@ -156,7 +156,6 @@ class CommunityUtils extends Logging with Serializable {
 
         // Print the result
         val lowerIDPerCommunity = ccByUsername.map { case (id, username, cci) => cci }.distinct().cache()
-        //val totalCommunity = cc.map { cc => cc }.distinct()
 
         // Result will be stored in an array
         var result = new ArrayBuffer[Graph[String, String]]()
@@ -165,8 +164,6 @@ class CommunityUtils extends Logging with Serializable {
         println("--------------------------")
 
         for (id <- lowerIDPerCommunity.collect()) {
-
-            // idComm => id
 
             println("\nCommunity ID : " + id)
 
@@ -210,7 +207,7 @@ class CommunityUtils extends Logging with Serializable {
         result
     }
 
-    def subgraphCommunities2(graph: Graph[String, String], users: RDD[(VertexId, (String))], displayResult: Boolean): (ArrayBuffer[Graph[String, String]], Array[Long]) = {
+    def subgraphCommunities2(graph: Graph[String, String], users: RDD[(VertexId, (String))], displayResult: Boolean): (Array[Graph[String, String]], Array[Long]) = {
 
         println(color("\nCall subgraphCommunities2", RED))
 
@@ -230,16 +227,18 @@ class CommunityUtils extends Logging with Serializable {
         //val totalCommunity = cc.map { cc => cc }.distinct()
 
         // Result will be stored in an array
-        var result = new ArrayBuffer[Graph[String, String]]()
+        //var result = new ArrayBuffer[Graph[String, String]]()
         println("--------------------------")
         println("Total community found: " + lowerIDPerCommunity.count())
         println("--------------------------")
 
-        val collectIDsCommunity = lowerIDPerCommunity.collect()
-        // For each community we want their LDA and cosine similarity
-        for (id <- collectIDsCommunity) {
 
-            // idComm => id
+        val collectIDsCommunity = lowerIDPerCommunity.collect()
+
+        val result = collectIDsCommunity.map(colID => Graph(ccByUsername.filter {_._3 == colID}.map { case (id, username, cc) => (id, username) }, graph.edges).subgraph(vpred = (id, username) => username != null).cache())
+
+        // For each community we want their LDA and cosine similarity
+        /*for (id <- collectIDsCommunity) {
 
             println("\nCommunity ID : " + id)
 
@@ -250,11 +249,11 @@ class CommunityUtils extends Logging with Serializable {
             // Create a new graph
             // And remove missing vertices as well as the edges to connected to them
             result += Graph(subGraphVertices, graph.edges).subgraph(vpred = (id, username) => username != null).cache()
-        }
+        }*/
 
         // Display communities
         if (displayResult) {
-            println("\nCommunities found " + result.size)
+            println("\nCommunities found " + result.length)
             for (community <- result) {
                 println("-----------------------")
                 community.edges.collect().foreach(println(_))
@@ -265,6 +264,10 @@ class CommunityUtils extends Logging with Serializable {
         println("--------------------------")
         println("SEND RESULT")
         println("--------------------------")
+
+        cc.unpersist()
+        lowerIDPerCommunity.unpersist()
+
         (result, collectIDsCommunity)
     }
 
