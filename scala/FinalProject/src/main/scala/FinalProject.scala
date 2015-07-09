@@ -46,6 +46,8 @@ object FinalProject {
 
     var counter = 0
 
+
+
     def color(str: String, col: String): String = "%s%s%s".format(col, str, ENDC)
 
     def main(args: Array[String]) {
@@ -82,8 +84,12 @@ object FinalProject {
             .setAppName("FinalProject")
             .setMaster("yarn-client")
             .set("spark.akka.frameSize", "500")
-            .set("spark.yarn.am.memory", "4g")
-            .set("spark.yarn.am.cores", "4")
+            .set("spark.streaming.blockInterval", "1000")
+            //.set("spark.dynamicAllocation.enabled", "true")
+            //.set("spark.dynamicAllocation.minExecutors", "3")
+            //.set("spark.dynamicAllocation.maxExecutor", "20")
+            //.set("spark.yarn.am.memory", "4g")
+            //.set("spark.yarn.am.cores", "4")
             //.set("spark.akka.threads", "10")
             //.set("spark.driver.cores", "8")
             //.set("spark.driver.memory", "32g")
@@ -106,8 +112,8 @@ object FinalProject {
         val patternCommonWords = new Regex("\\b(that|have|with|this|from|they|would|there|their|what|about|which|when|make|like|time|just|know|take|into|year|your|good|some|could|them|other|than|then|look|only|come|over|think|also|back|after|work|first|well|even|want|because|these|give|most|http|https|fpt)\\b")
 
         System.setProperty("twitter4j.http.retryCount", "5")
-        System.setProperty("twitter4j.http.retryIntervalSecs", "2")
-        System.setProperty("twitter4j.async.numThreads", "10")
+        System.setProperty("twitter4j.http.retryIntervalSecs", "1")
+        System.setProperty("twitter4j.async.numThreads", "20")
 
 
         // Set the system properties so that Twitter4j library used by twitter stream
@@ -117,7 +123,7 @@ object FinalProject {
         System.setProperty("twitter4j.oauth.accessToken", tc.getaccessToken())
         System.setProperty("twitter4j.oauth.accessTokenSecret", tc.getaccessTokenSecret())
 
-        val ssc = new StreamingContext(sparkConf, Seconds(30))
+        val ssc = new StreamingContext(sparkConf, Seconds(100))
         val stream = TwitterUtils.createStream(ssc, None, words)
 
         // Init SparkContext
@@ -136,7 +142,7 @@ object FinalProject {
         println("*******************************************\n")
 
         // Get every tweets
-        val rdd = sc.cassandraTable("twitter", "tweet_filtered").cache()
+        /*val rdd = sc.cassandraTable("twitter", "tweet_filtered").cache()
 
         println("Tweets by tweets -> Create documents and vocabulary")
 
@@ -163,7 +169,7 @@ object FinalProject {
         val (res1: Seq[(Long, Vector)], res2: Array[String]) = createdoc(dictionnary.distinct, currentTweets)
         println("Distinct words : " + dictionnary.distinct.size)
 
-
+*/
         // Init LDA
         lda = new LDA()
             .setK(numTopics)
@@ -172,46 +178,46 @@ object FinalProject {
             .setMaxIterations(numIterations)
         // .setOptimizer("online") // works with Apache Spark 1.4 only
 
-        if (res1.nonEmpty) {
-            // Start LDA
-            println("LDA Started")
-            time {
-                ldaModel = lda.run(ssc.sparkContext.parallelize(res1).cache())
-            }
+        /* if (res1.nonEmpty) {
+             // Start LDA
+             println("LDA Started")
+             time {
+                 ldaModel = lda.run(ssc.sparkContext.parallelize(res1).cache())
+             }
 
-            var tab1 = new ArrayBuffer[Double]
-            var tab2 = new ArrayBuffer[Double]
-            var tabcosine = new ArrayBuffer[Double]
+             var tab1 = new ArrayBuffer[Double]
+             var tab2 = new ArrayBuffer[Double]
+             var tabcosine = new ArrayBuffer[Double]
 
-            println("LDA Finished\nDisplay results")
-            val topicIndices = ldaModel.describeTopics(numWordsByTopics)
-            topicIndices.foreach { case (terms, termWeights) =>
+             println("LDA Finished\nDisplay results")
+             val topicIndices = ldaModel.describeTopics(numWordsByTopics)
+             topicIndices.foreach { case (terms, termWeights) =>
 
-                terms.zip(termWeights).foreach { case (term, weight) =>
-                    tab1 += res1.filter(x => x._1 == term).head._2.apply(term)
-                    tab2 += weight
-                }
+                 terms.zip(termWeights).foreach { case (term, weight) =>
+                     tab1 += res1.filter(x => x._1 == term).head._2.apply(term)
+                     tab2 += weight
+                 }
 
-                // Store every cosine similarity
-                tabcosine += cosineSimilarity(tab1, tab2)
+                 // Store every cosine similarity
+                 tabcosine += cosineSimilarity(tab1, tab2)
 
-                // Reset array
-                tab1 = new ArrayBuffer[Double]
-                tab2 = new ArrayBuffer[Double]
-            }
-            val biggestCosineIndex: Int = tabcosine.indexOf(tabcosine.max)
+                 // Reset array
+                 tab1 = new ArrayBuffer[Double]
+                 tab2 = new ArrayBuffer[Double]
+             }
+             val biggestCosineIndex: Int = tabcosine.indexOf(tabcosine.max)
 
-            println("Most similarity found with this topic: " + tabcosine(biggestCosineIndex))
-            println("Topic words : ")
+             println("Most similarity found with this topic: " + tabcosine(biggestCosineIndex))
+             println("Topic words : ")
 
-            ldaModel.describeTopics(numWordsByTopics).apply(biggestCosineIndex)._1.foreach { x =>
-                println(res2(x))
-            }
+             ldaModel.describeTopics(numWordsByTopics).apply(biggestCosineIndex)._1.foreach { x =>
+                 println(res2(x))
+             }
 
-            tabcosine = new ArrayBuffer[Double]
-        }
+             tabcosine = new ArrayBuffer[Double]
+         }
 
-
+ */
 
 
         println("\n\n*******************************************")
@@ -233,7 +239,7 @@ object FinalProject {
 
         // Stream about communication between two users
         val commStream = stream.map { status => (
-            status.getId.toString, //tweet_id
+            status.getId.toLong, //tweet_id
             status.getUser.getId.toString, // user_send_twitter_ID
             status.getUser.getScreenName, // user_send_name
             if (pattern.findFirstIn(status.getText).isEmpty) {
@@ -275,7 +281,9 @@ object FinalProject {
         // ************************************************************
         // Save tweet's informations into Cassandra
         // ************************************************************
-        tweetsStream.persist(StorageLevel.MEMORY_ONLY).foreachRDD(rdd => {
+        tweetsStream.foreachRDD(rdd => {
+
+            rdd.persist(StorageLevel.MEMORY_AND_DISK)
 
             val seqtweetsStream = new ListBuffer[(String, String, String, String, String, String)]()
 
@@ -303,6 +311,7 @@ object FinalProject {
 
             // reset
             seqtweetsStream.clear()
+            //rdd.unpersist()
         })
 
         // ************************************************************
@@ -315,8 +324,11 @@ object FinalProject {
         // ************************************************************
         // Save communication's informations in Cassandra
         // ************************************************************
-        commStream.persist(StorageLevel.MEMORY_AND_DISK).foreachRDD(rdd => {
-            
+        commStream.foreachRDD(rdd => {
+
+            // Timer
+            val t00 = System.nanoTime()
+
             // Collection of vertices (contains users)
             var collectionVertices = new ArrayBuffer[(Long, String)]()
 
@@ -326,11 +338,14 @@ object FinalProject {
             val seqcommStream = new ListBuffer[(String, String, String, String)]()
 
             //var textBuffer = new ArrayBuffer[(String, String)]
-            var textBuffer = collection.mutable.Map[String, String]()
+            //var textBuffer = collection.mutable.Map[Long, String]()
 
+            rdd.persist(StorageLevel.MEMORY_ONLY)
             /**
              * Enregistrement des messages dans cassandra
              */
+
+            var textBuffer = rdd.collect().map{ g => g._1 -> g._5 }.toMap
 
             // For each tweets in RDD
             for (item <- rdd.collect()) {
@@ -372,14 +387,17 @@ object FinalProject {
                         if (sendID != destID) {
                             // Create each users and edges
                             collectionVertices += ((destID, user_dest_name))
-                            collectionEdge += Edge(sendID, destID, item._1)
+                            collectionEdge += Edge(sendID, destID, item._1.toString)
 
-                            seqcommStream.append((item._1, item._2, sendID.toString, destID.toString))
+                            seqcommStream.append((item._1.toString, item._2, sendID.toString, destID.toString))
                         }
                     }
                     }
                 }
             }
+
+
+            //rdd.unpersist()
 
             sc.parallelize(seqcommStream).saveToCassandra(
                 "twitter",
@@ -420,7 +438,7 @@ object FinalProject {
                 stockGraph = Graph(stockGraph.vertices.union(sc.parallelize(collectionVertices)), stockGraph.edges.union(sc.parallelize(collectionEdge)))
             }
 
-            //println("TOTAL EDGES : " + stockGraph.edges.count())
+            println("TOTAL EDGES : " + stockGraph.edges.count())
             //println("TOTAL VERTICES : " + stockGraph.vertices.count())
 
             collectionVertices = new ArrayBuffer[(Long, String)]()
@@ -431,11 +449,12 @@ object FinalProject {
              * Split main Graph in multiples communities
              */
 
-            counter += 1
 
             val communityGraph = time {
                 comUtils splitCommunity(stockGraph, stockGraph.vertices, false)
             }
+
+            communityGraph.cache()
 
             val (subgraphs, commIDs) = time {
                 comUtils subgraphCommunities2(communityGraph, stockGraph.vertices, false)
@@ -445,19 +464,33 @@ object FinalProject {
              * LDA
              */
 
+
             var cpt = 0
             for (i <- subgraphs.indices) {
+            //for (sub <- subgraphs) {
 
                 // Timer
                 val t0 = System.nanoTime()
 
                 // Current subgraph
                 val sub = subgraphs(i).cache()
+                //sub.cache()
+
+                val edges = sub.edges.cache().collect()
+
+                println("............................................................")
+                println(edges.foreach(println(_)))
+                println(sub.vertices.collect().foreach(println(_)))
+                println("............................................................")
 
                 if (sub.vertices.count() <= 2) {
                     println("Number of users:" + sub.vertices.count())
-                    println("I'm not gonna use it")
+                    //println("I'm not gonna use it")
                 } else {
+                    println("Number of users:" + sub.vertices.count())
+                    if (cpt == 0) {
+                        counter += 1
+                    }
 
                     // Result will be stored in an array
                     val result = new ArrayBuffer[String]()
@@ -465,18 +498,36 @@ object FinalProject {
                     // Store cosine calculus
                     var tabcosine = new ArrayBuffer[Double]()
 
+                    /*textBuffer.toList.sorted foreach {
+                        case (key, value) =>
+                            println(key + " = " + value)
+                    }*/
+
+                    println(textBuffer.keys)
+
                     // Store tweet's text in result
-                    for (v <- sub.edges.collect()) {
+                    for (v <- edges) {
+
+                        if (textBuffer.contains(v.attr.toLong)) {
+                            println("I SEE IT")
+                        }
+
+                        println("IL EST LA PUTAIN: " + textBuffer.get(v.attr.toLong))
+
                         if (textBuffer.keys.exists(_.toString == v.attr.toString)) {
-                            result += textBuffer.get(v.attr.toString).toString.replaceAll("[!?.,:;<>)(]", " ")
+                            println("DEDANS:" + textBuffer.get(v.attr.toLong))
+                            result += textBuffer.get(v.attr.toLong).toString.replaceAll("[!?.,:;<>)(]", " ")
                         }
                     }
 
 
+
                     if (result.nonEmpty) {
-                        println("LDA wont process current document because it does not contains any words")
-                    }else{
                         println("Words in current tweet: " + result.size)
+                        println(result)
+                    } else {
+                        println("LDA wont process current document because it does not contains any words")
+                        println(result)
                     }
 
                     /**
@@ -588,7 +639,8 @@ object FinalProject {
                     result.clear()
                 }
 
-                textBuffer.clear()
+                //textBuffer.clear()
+                
 
                 // Enregistrement sur fichier JSON ( selon des fichiers )
                 /*for (sub <- subgraphs) {
@@ -608,8 +660,14 @@ object FinalProject {
                 //}
 
                 val t1 = System.nanoTime()
-                println("SubGraph N°: " + i + " processed in " + (t1 - t0) / 1000000000.0 + " seconds")
+                println("SubGraph N°: " + cpt + " processed in " + (t1 - t0) / 1000000000.0 + " seconds")
             }
+
+            val t11 = System.nanoTime()
+            println("------------------------------------------------------------")
+            println("BATCH FINISHED")
+            println("Processed in " + (t11 - t00) / 1000000000.0 + " seconds")
+            println("------------------------------------------------------------")
         })
 
         ssc.start()

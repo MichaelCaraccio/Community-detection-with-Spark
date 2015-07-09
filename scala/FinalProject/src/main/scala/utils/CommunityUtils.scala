@@ -262,6 +262,9 @@ class CommunityUtils extends Logging with Serializable {
             }
         }
 
+        println("--------------------------")
+        println("SEND RESULT")
+        println("--------------------------")
         (result, collectIDsCommunity)
     }
 
