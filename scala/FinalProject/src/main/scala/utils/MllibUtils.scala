@@ -175,7 +175,6 @@ class MllibUtils(/*_dictionnary: ArrayBuffer[String], _currentTweet: ArrayBuffer
         if (displayResult) {
             topicIndices.foreach { case (terms, termWeights) =>
                 println("TOPICS:")
-
                 var tabTopics = new ArrayBuffer[String]()
 
                 terms.zip(termWeights).foreach { case (term, weight) =>
