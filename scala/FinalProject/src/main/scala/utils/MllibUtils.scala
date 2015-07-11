@@ -160,7 +160,7 @@ class MllibUtils(/*_dictionnary: ArrayBuffer[String], _currentTweet: ArrayBuffer
      *
      * @return LDAModel
      */
-    def findTopics(ldaModel: LDAModel, vocabArray: Array[String], T: Int, SG: Int, numWordsByTopics: Int, displayResult: Boolean): Seq[(String, String, String, String)] = {
+    def findTopics(ldaModel: LDAModel, vocabArray: Array[String], T: String, SG: Int, numWordsByTopics: Int, displayResult: Boolean): Seq[(String, String, String, String)] = {
 
         println(color("\nCall findTopics", RED))
 
@@ -174,20 +174,27 @@ class MllibUtils(/*_dictionnary: ArrayBuffer[String], _currentTweet: ArrayBuffer
         // Print topics, showing top-weighted x terms for each topic.
         if (displayResult) {
             topicIndices.foreach { case (terms, termWeights) =>
-                println("TOPICS:")
+
+                if(displayResult)
+                    println("TOPICS:")
+
                 var tabTopics = new ArrayBuffer[String]()
 
                 terms.zip(termWeights).foreach { case (term, weight) =>
-                    println(s"${vocabArray(term.toInt)}\t\t$weight")
+
+                    if(displayResult)
+                        println(s"${vocabArray(term.toInt)}\t\t$weight")
+
                     tabTopics += vocabArray(term.toInt)
                 }
 
-                seqC = seqC :+(T.toString, SG.toString, it.toString, tabTopics.mkString(";"))
+                seqC = seqC :+(T, SG.toString, it.toString, tabTopics.mkString(";"))
 
-                //println("T: " + T + " SG: " + SG + "TopicN: " + it + " c: " + tabTopics.mkString(";"))
+                println("T: " + T + " SG: " + SG + "TopicN: " + it + " c: " + tabTopics.mkString(";"))
                 it += 1
 
-                println()
+                if(displayResult)
+                    println()
             }
         }
         seqC.toSeq
