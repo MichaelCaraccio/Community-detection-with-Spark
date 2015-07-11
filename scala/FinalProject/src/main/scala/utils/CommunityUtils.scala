@@ -24,11 +24,11 @@ class CommunityUtils extends Logging with Serializable {
      * @return ArrayBuffer[Graph[String,String]] - Contains one graph per community
      *
      */
-    def splitCommunity(graph: Graph[String, String], users: RDD[(VertexId, (String))], displayResult: Boolean): Graph[String, String] = {
+    def splitCommunity(graph: Graph[String, String], users: RDD[(VertexId, (String))], NBKCORE: Int , displayResult: Boolean): Graph[String, String] = {
 
         println(color("\nCall SplitCommunity", RED))
 
-        getKCoreGraph(graph, users, 4, displayResult).cache()
+        getKCoreGraph(graph, users, NBKCORE, displayResult).cache()
     }
 
     /**
@@ -139,57 +139,6 @@ class CommunityUtils extends Logging with Serializable {
         Pregel(graph, 0)(vProg, sendMsg, mergeMsg)
     }
 
-    def subgraphCommunities(graph: Graph[String, String], users: RDD[(VertexId, (String))], displayResult: Boolean): ArrayBuffer[Graph[String, String]] = {
-
-        println(color("\nCall subgraphCommunities", RED))
-
-        // Find the connected components
-        val cc = time {
-            graph.connectedComponents().vertices.cache()
-        }
-
-        // Join the connected components with the usernames and id
-        // The result is an RDD not a Graph
-        val ccByUsername = users.join(cc).map {
-            case (id, (username, cci)) => (id, username, cci)
-        }.cache()
-
-        // Print the result
-        val lowerIDPerCommunity = ccByUsername.map { case (id, username, cci) => cci }.distinct().cache()
-
-        // Result will be stored in an array
-        var result = new ArrayBuffer[Graph[String, String]]()
-        println("--------------------------")
-        println("Total community found: " + lowerIDPerCommunity.count())
-        println("--------------------------")
-
-        for (id <- lowerIDPerCommunity.collect()) {
-
-            println("\nCommunity ID : " + id)
-
-            val subGraphVertices = ccByUsername.filter {
-                _._3 == id
-            }.map { case (id, username, cc) => (id, username) }
-
-            // Create a new graph
-            // And remove missing vertices as well as the edges to connected to them
-            val tempGraph = Graph(subGraphVertices, graph.edges).subgraph(vpred = (id, username) => username != null)
-
-            result += tempGraph.cache()
-        }
-
-        // Display communities
-        if (displayResult) {
-            println("\nCommunities found " + result.size)
-            for (community <- result) {
-                println("-----------------------")
-                community.edges.collect().foreach(println(_))
-                community.vertices.collect().foreach(println(_))
-            }
-        }
-
-        result
-    }
 
     /**
      * @constructor time
@@ -207,7 +156,7 @@ class CommunityUtils extends Logging with Serializable {
         result
     }
 
-    def subgraphCommunities2(graph: Graph[String, String], users: RDD[(VertexId, (String))], displayResult: Boolean): (Array[Graph[String, String]], Array[Long]) = {
+    def subgraphCommunities(graph: Graph[String, String], users: RDD[(VertexId, (String))], displayResult: Boolean): (Array[Graph[String, String]], Array[Long]) = {
 
         println(color("\nCall subgraphCommunities2", RED))
 
@@ -224,7 +173,6 @@ class CommunityUtils extends Logging with Serializable {
 
         // Print the result
         val lowerIDPerCommunity = ccByUsername.map { case (id, username, cci) => cci }.distinct().cache()
-        //val totalCommunity = cc.map { cc => cc }.distinct()
 
         // Result will be stored in an array
         //var result = new ArrayBuffer[Graph[String, String]]()
@@ -237,20 +185,6 @@ class CommunityUtils extends Logging with Serializable {
 
         val result = collectIDsCommunity.map(colID => Graph(ccByUsername.filter {_._3 == colID}.map { case (id, username, cc) => (id, username) }, graph.edges).subgraph(vpred = (id, username) => username != null).cache())
 
-        // For each community we want their LDA and cosine similarity
-        /*for (id <- collectIDsCommunity) {
-
-            println("\nCommunity ID : " + id)
-
-            val subGraphVertices = ccByUsername.filter {
-                _._3 == id
-            }.map { case (id, username, cc) => (id, username) }
-
-            // Create a new graph
-            // And remove missing vertices as well as the edges to connected to them
-            result += Graph(subGraphVertices, graph.edges).subgraph(vpred = (id, username) => username != null).cache()
-        }*/
-
         // Display communities
         if (displayResult) {
             println("\nCommunities found " + result.length)
@@ -260,10 +194,6 @@ class CommunityUtils extends Logging with Serializable {
                 community.vertices.collect().foreach(println(_))
             }
         }
-
-        println("--------------------------")
-        println("SEND RESULT")
-        println("--------------------------")
 
         cc.unpersist()
         lowerIDPerCommunity.unpersist()
