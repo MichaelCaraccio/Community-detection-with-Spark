@@ -158,7 +158,7 @@ class CommunityUtils extends Logging with Serializable {
 
     def subgraphCommunities(graph: Graph[String, String], users: RDD[(VertexId, (String))], displayResult: Boolean): (Array[Graph[String, String]], Array[Long]) = {
 
-        println(color("\nCall subgraphCommunities2", RED))
+        println(color("\nCall subgraphCommunities", RED))
 
         // Find the connected components
         val cc = time {
