@@ -1,11 +1,10 @@
 package utils
 
 import org.apache.spark.mllib.clustering._
-import org.apache.spark.mllib.linalg.{Vectors, Vector}
+import org.apache.spark.mllib.linalg.{Vector, Vectors}
 import org.apache.spark.rdd.RDD
 
 import scala.collection.mutable
-import scala.collection.mutable.ArrayBuffer
 
 /**
  * Topic models automatically infer the topics discussed in a collection of documents. These topics can be used
@@ -14,32 +13,36 @@ import scala.collection.mutable.ArrayBuffer
  *
  * LDA is not given topics, so it must infer them from raw text. LDA defines a topic as a distribution over words.
  */
-class MllibUtils() {
+class MllibUtils {
 
-    // Text Color
+    // Terminal Color
     val RED = "\033[1;30m"
     val ENDC = "\033[0m"
+
+    def color(str: String, col: String): String = "%s%s%s".format(col, str, ENDC)
 
     def createdoc(tokenizedCorpus: RDD[String]): ((Seq[(Long, Vector)], Array[String], Map[String, Int], Array[String])) = {
 
         println(color("\nCall createdoc", RED))
 
         // Choose the vocabulary.
-        //   termCounts: Sorted list of (term, termCount) pairs
+        // termCounts: Sorted list of (term, termCount) pairs
         val termCounts: Array[(String, Long)] =
             tokenizedCorpus.map(_ -> 1L).reduceByKey(_ + _).collect().sortBy(-_._2)
-        //   vocabArray: Chosen vocab (removing common terms)
+
+        // vocabArray: Chosen vocab (removing common terms)
         val numStopwords = 20
         val vocabArray: Array[String] =
             termCounts.takeRight(termCounts.length - numStopwords).map(_._1)
-        //   vocab: Map term -> term index
+
+        // vocab: Map term -> term index
         val vocab: Map[String, Int] = vocabArray.zipWithIndex.toMap
 
-        val connard = tokenizedCorpus.collect()
+        val tokenCollected = tokenizedCorpus.collect()
 
 
         // MAP : [ Word ID , VECTOR [vocab.size, WordFrequency]]
-        val documents:Map[Long, Vector] = vocab.map { case (tokens, id) =>
+        val documents: Map[Long, Vector] = vocab.map { case (tokens, id) =>
 
             val counts = new mutable.HashMap[Int, Double]()
 
@@ -47,21 +50,21 @@ class MllibUtils() {
             val idx = vocab(tokens)
 
             // Count word occurancy
-            counts(idx) = counts.getOrElse(idx, 0.0) + connard.count(_ == tokens)
+            counts(idx) = counts.getOrElse(idx, 0.0) + tokenCollected.count(_ == tokens)
 
             // Return word ID and Vector
             (id.toLong, Vectors.sparse(vocab.size, counts.toSeq))
         }
 
-        (documents.toSeq, tokenizedCorpus.collect(),vocab,tokenizedCorpus.collect())
+        (documents.toSeq, tokenizedCorpus.collect(), vocab, tokenizedCorpus.collect())
     }
 
 
-    def cosineSimilarity(tokenizedCorpus: RDD[String], vocab:Map[String, Int], tokenizedTweet:Array[String]) : (Seq[(Long, Vector)]) = {
+    def cosineSimilarity(tokenizedCorpus: RDD[String], vocab: Map[String, Int], tokenizedTweet: Array[String]): (Seq[(Long, Vector)]) = {
 
         println(color("\nCall cosineSimilarity", RED))
 
-        val document:Map[Long, Vector] = vocab.map { case (tokens, id) =>
+        val document: Map[Long, Vector] = vocab.map { case (tokens, id) =>
 
             val counts2 = new mutable.HashMap[Int, Double]()
 
@@ -77,88 +80,6 @@ class MllibUtils() {
 
         document.toSeq
     }
-
-
-    /**
-     *
-     * @param tokenizedCorpus
-     * @param x
-     * @return
-     */
-    /*def createdoc(tokenizedCorpus: RDD[Seq[String]], x: String): ((Seq[(Long, Vector)], Array[String])) = {
-
-        /*val tokenizedTweet: Seq[String] = x.split(" ").toSeq
-
-        // Map[String, Int] of words and theirs places in tweet
-        val vocab: Map[String, Int] = tokenizedCorpus.zipWithIndex.toMap
-
-        // MAP : [ Word ID , VECTOR [vocab.size, WordFrequency]]
-        val documents: Map[Long, Vector] = vocab.map { case (tokens, id) =>
-
-            val counts = new mutable.HashMap[Int, Double]()
-
-            // Word ID
-            val idx = vocab(tokens)
-
-            // Count word occurancy
-            counts(idx) = counts.getOrElse(idx, 0.0) + tokenizedTweet.count(_ == tokens)
-
-            // Return word ID and Vector
-            (id.toLong, Vectors.sparse(vocab.size, counts.toSeq))
-        }
-        println("Document size: " + documents.size)
-        (documents.toSeq, tokenizedCorpus.toArray)*/
-
-        // Tweet -> seq
-        val tokenizedTweet: Seq[String] = x.split(" ").toSeq
-
-        // Choose the vocabulary.
-        //   termCounts: Sorted list of (term, termCount) pairs
-        val termCounts: Array[(String, Long)] =
-            tokenizedCorpus.flatMap(_.map(_ -> 1L)).reduceByKey(_ + _).collect().sortBy(-_._2)
-        //   vocabArray: Chosen vocab (removing common terms)
-
-        val numStopwords = 0
-        val vocabArray: Array[String] =
-            termCounts.takeRight(termCounts.length - numStopwords).map(_._1)
-        //   vocab: Map term -> term index
-        val vocab: Map[String, Int] = vocabArray.zipWithIndex.toMap
-
-
-        // Convert documents into term count vectors
-        val documents: RDD[(Long, Vector)] =
-            tokenizedCorpus.zipWithIndex().map { case (tokens, id) =>
-                val counts = new mutable.HashMap[Int, Double]()
-                tokens.foreach { term =>
-                    if (vocab.contains(term)) {
-                        val idx = vocab(term)
-                        counts(idx) = counts.getOrElse(idx, 0.0) + 1.0
-                    }
-                }
-                (id, Vectors.sparse(vocab.size, counts.toSeq))
-            }
-
-        // Map[String, Int] of words and theirs places in tweet
-        //val vocab: Map[String, Int] = tokenizedCorpus.zipWithIndex.
-
-        // MAP : [ Word ID , VECTOR [vocab.size, WordFrequency]]
-        /*val documents: Map[Long, Vector] = vocab.map { case (tokens, id) =>
-
-            val counts = new mutable.HashMap[Int, Double]()
-
-            // Word ID
-            val idx = vocab(tokens)
-
-            // Count word occurancy
-            counts(idx) = counts.getOrElse(idx, 0.0) + tokenizedTweet.count(_ == tokens)
-
-            // Return word ID and Vector
-            (id.toLong, Vectors.sparse(vocab.size, counts.toSeq))
-        }*/
-        println("Document size: " + documents.count())
-        (documents, tokenizedCorpus)
-    }*/
-
 
     /**
      * @constructor findTopics
@@ -208,6 +129,4 @@ class MllibUtils() {
         }
         seqC.toSeq
     }
-
-    def color(str: String, col: String): String = "%s%s%s".format(col, str, ENDC)
 }

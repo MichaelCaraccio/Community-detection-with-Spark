@@ -4,11 +4,10 @@ import org.apache.spark._
 import org.apache.spark.graphx._
 import org.apache.spark.rdd.RDD
 
-import scala.collection.mutable.ArrayBuffer
 import scala.math._
 import scala.reflect.ClassTag
 
-class CommunityUtils extends Logging with Serializable {
+class CommunityUtils extends Logging {
 
     val RED = "\033[1;30m"
     val ENDC = "\033[0m"
@@ -24,7 +23,7 @@ class CommunityUtils extends Logging with Serializable {
      * @return ArrayBuffer[Graph[String,String]] - Contains one graph per community
      *
      */
-    def splitCommunity(graph: Graph[String, String], users: RDD[(VertexId, (String))], NBKCORE: Int , displayResult: Boolean): Graph[String, String] = {
+    def splitCommunity(graph: Graph[String, String], users: RDD[(VertexId, (String))], NBKCORE: Int, displayResult: Boolean): Graph[String, String] = {
 
         println(color("\nCall SplitCommunity", RED))
 
@@ -183,7 +182,9 @@ class CommunityUtils extends Logging with Serializable {
 
         val collectIDsCommunity = lowerIDPerCommunity.collect()
 
-        val result = collectIDsCommunity.map(colID => Graph(ccByUsername.filter {_._3 == colID}.map { case (id, username, cc) => (id, username) }, graph.edges).subgraph(vpred = (id, username) => username != null).cache())
+        val result = collectIDsCommunity.map(colID => Graph(ccByUsername.filter {
+            _._3 == colID
+        }.map { case (id, username, cc) => (id, username) }, graph.edges).subgraph(vpred = (id, username) => username != null).cache())
 
         // Display communities
         if (displayResult) {
