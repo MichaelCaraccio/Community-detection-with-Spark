@@ -7,6 +7,7 @@ import org.apache.spark.streaming.twitter.TwitterUtils
 import utils._
 import scala.collection.mutable
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
+import org.apache.spark.streaming.twitter._
 
 
 import scala.math._
@@ -26,10 +27,6 @@ import org.apache.spark.mllib.clustering.{LDA, _}
 import org.apache.spark.mllib.linalg.{Vectors, Vector}
 
 
-
-// TODO Unpersist stuff
-
-
 object FinalProject {
 
     // /////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -39,7 +36,7 @@ object FinalProject {
     var MIN_VERTICES_PER_COMMUNITIES = 6    // Limit - Minimum vertices per communities
     var MIN_WORD_LENGTH = 3                 // Minimum word length in tweet
     var NBKCORE = 6                         // Number of core - K Core Decomposition algorithm
-    var BATCH_SIZE = 1800                    // Batch size (in seconds)
+    var BATCH_SIZE = 60                     // Batch size (in seconds)
     var CLEAN_GRAPH_MOD = 3                 // Clean stockGraph every CLEAN_GRAPH_MOD
     var CLEAN_GRAPH_NBKCORE = 2             // When clean graph is called, k-core decomposition is called
 
@@ -84,7 +81,7 @@ object FinalProject {
 
         // Spark configuration
         val sparkConf = new SparkConf(true)
-            .setAppName("FinalProject")
+            .setAppName("FinalProjectMichael")
             .setMaster("yarn-client")
             //.set("spark.akka.frameSize", "250")
             //.set("spark.streaming.blockInterval", "2000")
@@ -96,10 +93,11 @@ object FinalProject {
             //.set("spark.streaming.receiver.maxRate", "0") // no limit on the rate
             //.set("spark.yarn.am.memory", "4g")
             //.set("spark.yarn.am.cores", "4")
+            //.set("spark.shuffle.consolidateFiles", "true")
             //.set("spark.io.compression.codec", "lzf") // improve shuffle performance
             //.set("spark.akka.threads", "10")
             //.set("spark.driver.cores", "8")
-            //.set("spark.driver.memory", "32g")
+           // .set("spark.driver.memory", "32g")
             //.set("spark.executor.memory", "8g")
             .set("spark.driver.maxResultSize", "0") // no limit
             //.set("spark.executor.memory", "2g") // Amount of memory to use for the driver process
@@ -113,7 +111,9 @@ object FinalProject {
             //.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")// kryo is much faster
             //.set("spark.kryoserializer.buffer.mb", "256") // I serialize bigger objects
             //.set("spark.mesos.coarse", "true") // link provided
-            .set("spark.akka.frameSize", "1000") // workers should be able to send bigger messages
+            .set("spark.akka.frameSize", "800") // workers should be able to send bigger messages
+            //.set("spark.executor.extraJavaOptions", "-XX:MaxPermSize=1024M -XX:+UseCompressedOops")
+            .set("spark.akka.timeout", "180")
             .set("spark.akka.askTimeout", "30"); // high CPU/IO load
 
         //sparkConf.registerKryoClasses(Array(classOf[MllibUtils]))
@@ -126,9 +126,10 @@ object FinalProject {
         System.setProperty("twitter4j.oauth.consumerSecret", tc.getconsumerSecret())
         System.setProperty("twitter4j.oauth.accessToken", tc.getaccessToken())
         System.setProperty("twitter4j.oauth.accessTokenSecret", tc.getaccessTokenSecret())
-        System.setProperty("twitter4j.http.retryCount", "5")
-        System.setProperty("twitter4j.http.retryIntervalSecs", "1")
-        System.setProperty("twitter4j.async.numThreads", "10")
+        System.setProperty("twitter4j.http.connectionTimeout", "200000")
+        System.setProperty("twitter4j.http.retryCount", "30")
+        System.setProperty("twitter4j.http.retryIntervalSecs", "2")
+        //System.setProperty("twitter4j.async.numThreads", "1")
 
 
 
@@ -206,17 +207,20 @@ object FinalProject {
         // .setOptimizer("online") // works with Apache Spark 1.4 only
 
         // Create documents for LDA
-        val (res1: Seq[(Long, Vector)], res2: Array[String], vocab: Map[String, Int]) = time { createdoc(dictRDDInit) }
+        val (res1: RDD[(Long, Vector)], res2: Array[String], vocab: Map[String, Int]) = time { createdoc(dictRDDInit) }
 
         dictRDDInit.unpersist()
 
         println("Distinct words : " + dictionnary.distinct.size)
 
-        if (res1.nonEmpty) {
+        res1.persist(StorageLevel.MEMORY_AND_DISK)
+        //res1.partitions(1000)
+
+        if (!res1.isEmpty()) {
             // Start LDA
             println("LDA Started")
             time {
-                ldaModel = lda.run(ssc.sparkContext.parallelize(res1).cache())
+                ldaModel = lda.run(res1)
             }
             println("LDA Finished\n")
         }
@@ -482,14 +486,14 @@ object FinalProject {
 
             // Create document
             println("Create document")
-            val dictRDD = sc.parallelize(dictionnary).cache()
+            val dictRDD = sc.parallelize(dictionnary).persist(StorageLevel.MEMORY_AND_DISK)
 
-            val (res1: Seq[(Long, Vector)], res2: Array[String], vocab: Map[String, Int]) = time { createdoc (dictRDD) }
+            val (res1: RDD[(Long, Vector)], res2: Array[String], vocab: Map[String, Int]) = time { createdoc (dictRDD) }
 
 
             // Start LDA
             println("LDA Started")
-            ldaModel = lda.run(ssc.sparkContext.parallelize(res1).cache())
+            ldaModel = lda.run(res1.cache())
 
             var seqC: Seq[(String, String, String, String)] = findTopics(ldaModel, res2, counter.toString, 0, numWordsByTopics, displayResult = true)
 
@@ -588,7 +592,7 @@ object FinalProject {
                         // Petit problème avec le counter qui ne se met pas a jour dans la method au dessus
                         seqcommunities = seqcommunities.map(a => (counter.toString, a._2, a._3, a._4, a._5, a._6, a._7, a._8))
 
-                        //seqcommunities.foreach(println(_))
+                        seqcommunities.foreach(println(_))
 
                         // Save to cassandra
                         sc.parallelize(seqcommunities.toSeq).saveToCassandra(
@@ -952,13 +956,13 @@ object FinalProject {
 
 
 
-    def createdoc(tokenizedCorpus: RDD[String]): ((Seq[(Long, Vector)], Array[String], Map[String, Int])) = {
+    def createdoc(tokenizedCorpus: RDD[String]): ((RDD[(Long, Vector)], Array[String], Map[String, Int])) = {
 
         println(color("\nCall createdoc", RED))
 
         // Choose the vocabulary.
         // termCounts: Sorted list of (term, termCount) pairs
-        val termCounts: Array[(String, Long)] =
+        /*val termCounts: Array[(String, Long)] =
             tokenizedCorpus.map(_ -> 1L).reduceByKey(_ + _).collect().sortBy(-_._2)
 
         // vocabArray: Chosen vocab (removing common terms)
@@ -974,11 +978,11 @@ object FinalProject {
         // count the occurrence of each word
         //val wordCounts = tokenizedCorpus.map((_, 1)).reduceByKey(_ + _)
 
+        val counts = new mutable.HashMap[Int, Double]()
+
 
         // MAP : [ Word ID , VECTOR [vocab.size, WordFrequency]]
         val documents: Map[Long, Vector] = vocab.map { case (tokens, id) =>
-
-            val counts = new mutable.HashMap[Int, Double]()
 
             // Word ID
             val idx = vocab(tokens)
@@ -989,9 +993,37 @@ object FinalProject {
 
             // Return word ID and Vector
             (id.toLong, Vectors.sparse(vocab.size, counts.toSeq))
-        }
+        }*/
 
-        (documents.toSeq, tokenizedCorpus.collect(), vocab)
+        // Split each document into a sequence of terms (words)
+        val tokenized: RDD[Seq[String]] =
+            tokenizedCorpus.map(_.toLowerCase.split("\\s")).map(_.filter(_.length > 3).filter(_.forall(java.lang.Character.isLetter)))
+
+        // Choose the vocabulary.
+        //   termCounts: Sorted list of (term, termCount) pairs
+        val termCounts: Array[(String, Long)] =
+            tokenized.flatMap(_.map(_ -> 1L)).reduceByKey(_ + _).collect().sortBy(-_._2)
+        //   vocabArray: Chosen vocab (removing common terms)
+        val numStopwords = 0
+        val vocabArray: Array[String] =
+            termCounts.takeRight(termCounts.size - numStopwords).map(_._1)
+        //   vocab: Map term -> term index
+        val vocab: Map[String, Int] = vocabArray.zipWithIndex.toMap
+
+        // Convert documents into term count vectors
+        val documents: RDD[(Long, Vector)] =
+            tokenized.zipWithIndex.map { case (tokens, id) =>
+                val counts = new mutable.HashMap[Int, Double]()
+                tokens.foreach { term =>
+                    if (vocab.contains(term)) {
+                        val idx = vocab(term)
+                        counts(idx) = counts.getOrElse(idx, 0.0) + 1.0
+                    }
+                }
+                (id, Vectors.sparse(vocab.size, counts.toSeq))
+            }
+
+        (documents, tokenizedCorpus.collect(), vocab)
     }
 
 
@@ -999,9 +1031,9 @@ object FinalProject {
 
         println(color("\nCall cosineSimilarity", RED))
 
-        val document: Map[Long, Vector] = vocab.map { case (tokens, id) =>
+        val counts2 = new mutable.HashMap[Int, Double]()
 
-            val counts2 = new mutable.HashMap[Int, Double]()
+        val document: Map[Long, Vector] = vocab.map { case (tokens, id) =>
 
             // Word ID
             val idx = vocab(tokens)
