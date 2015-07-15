@@ -7,17 +7,28 @@ scalaVersion := "2.10.5"
 libraryDependencies ++= Seq(
     "org.apache.spark" %% "spark-core" % "1.3.0" % "provided",
     "org.apache.spark" %% "spark-graphx" % "1.3.0" % "provided",
-    "org.apache.spark" %% "spark-streaming" % "1.3.0" % "provided",
-    "org.apache.spark" %% "spark-mllib" % "1.3.0" % "provided",
+    //"org.apache.spark" %% "spark-streaming" % "1.3.0" % "provided",
+    "org.apache.spark" %% "spark-mllib" % "1.3.0" % "provided"//,
     //    "org.apache.commons" % "commons-lang3" % "3.3.2",
-    "org.apache.spark" %% "spark-streaming-twitter" % "1.2.1")
+    /*"org.apache.spark" %% "spark-streaming-twitter" % "1.3.0"*/)
+
+//libraryDependencies += "org.apache.spark" % "spark-streaming_2.10" % "1.3.0"
+libraryDependencies += "org.apache.spark" % "spark-streaming-twitter_2.10" % "1.3.0"	
 
 libraryDependencies += "com.datastax.spark" %% "spark-cassandra-connector" % "1.3.0-M1"
 
 //libraryDependencies += "com.google.code.gson" % "gson" % "2.3"
 
-libraryDependencies += "com.github.fommil.netlib" % "all" % "1.1.2" pomOnly()
+//libraryDependencies += "com.github.fommil.netlib" % "all" % "1.1.2" pomOnly()
 
+// http://stackoverflow.com/questions/28459333/how-to-build-an-uber-jar-fat-jar-using-sbt-within-intellij-idea
+// META-INF discarding
+mergeStrategy in assembly <<= (mergeStrategy in assembly) { (old) =>
+   {
+    case PathList("META-INF", xs @ _*) => MergeStrategy.discard
+    case x => MergeStrategy.first
+   }
+}
 
 resolvers ++= Seq(
     // "JBoss Repository" at "http://repository.jboss.org/nexus/content/repositories/releases/",
