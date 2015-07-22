@@ -5,26 +5,30 @@ import org.apache.spark.storage.StorageLevel
 import org.apache.spark.streaming._
 import org.apache.spark.streaming.twitter.TwitterUtils
 import utils._
+import org.apache.spark.SparkContext
+import org.apache.spark.SparkContext._
+
 import scala.collection.mutable
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
-import org.apache.spark.streaming.twitter._
-
-
 import scala.math._
 import scala.reflect.ClassTag
 
 //Log4J
+
 import org.apache.log4j.{Level, Logger}
 
 // Cassandra
+
 import com.datastax.spark.connector._
 
 // Regex
+
 import scala.util.matching.Regex
 
 // MLlib
+
 import org.apache.spark.mllib.clustering.{LDA, _}
-import org.apache.spark.mllib.linalg.{Vectors, Vector}
+import org.apache.spark.mllib.linalg.{Vector, Vectors}
 
 
 object FindCommunities {
@@ -33,35 +37,45 @@ object FindCommunities {
     // CONSTANT
     // /////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-    var MIN_VERTICES_PER_COMMUNITIES = 3    // Limit - Minimum vertices per communities
-    var MIN_WORD_LENGTH = 3                 // Minimum word length in tweet
-    var NBKCORE = 3                         // Number of core - K Core Decomposition algorithm
-    var BATCH_SIZE = 200                     // Batch size (in seconds)
-    var CLEAN_GRAPH_MOD = 3                 // Clean stockGraph every CLEAN_GRAPH_MOD
-    var CLEAN_GRAPH_NBKCORE = 2             // When clean graph is called, k-core decomposition is called
+    var MIN_VERTICES_PER_COMMUNITIES = 6
+    // Limit - Minimum vertices per communities
+    var MIN_WORD_LENGTH = 3
+    // Minimum word length in tweet
+    var NBKCORE = 6
+    // Number of core - K Core Decomposition algorithm
+    var BATCH_SIZE = 900
+    // Batch size (in seconds)
+    var CLEAN_GRAPH_MOD = 4
+    // Clean stockGraph every CLEAN_GRAPH_MOD
+    var CLEAN_GRAPH_NBKCORE = 2 // When clean graph is called, k-core decomposition is called
 
-    val defaultSeed = 0xadc83b19L   // Seed for murmurhash - Do not change this value
+    val defaultSeed = 0xadc83b19L // Seed for murmurhash - Do not change this value
 
-    var dictionnary = new ArrayBuffer[String]()     // Store tweets
-    var ldaModel: DistributedLDAModel = null        // LDA Model
-    var lda: LDA = null                             // LDA object
-    var stockGraph: Graph[String, String] = null    // Store every edges and vertices received by Twitter
-    var currentTweets: String = ""                  // Current tweet received
+    var dictionnary = new ArrayBuffer[String]()
+    // Store tweets
+    var ldaModel: LDAModel = null
+    // LDA Model
+    var lda: LDA = null
+    // LDA object
+    var stockGraph: Graph[String, String] = null
+    // Store every edges and vertices received by Twitter
+    var currentTweets: String = ""
+    // Current tweet received
     var counter = 1
 
-    val RED = "\033[1;30m"                          // Terminal color RED
-    val ENDC = "\033[0m"                            // Terminal end character
+    val RED = "\033[1;30m"
+    // Terminal color RED
+    val ENDC = "\033[0m" // Terminal end character
 
 
     def color(str: String, col: String): String = "%s%s%s".format(col, str, ENDC)
 
 
-
     def main(args: Array[String]) {
 
         //val comUtils = new CommunityUtils   // Community methods
-        val ru = new RDDUtils               // Manipulate RDD class
-        val tc = new TwitterConfig          // Login and password for Twitter
+        val ru = new RDDUtils // Manipulate RDD class
+        val tc = new TwitterConfig // Login and password for Twitter
         //val mu = new MllibUtils()           // LDA class
 
         // LDA parameters
@@ -72,58 +86,62 @@ object FindCommunities {
         val numWordsByTopics = 12
 
         // Display only error messages
-        Logger.getLogger("org").setLevel(Level.ERROR)
-        Logger.getLogger("akka").setLevel(Level.ERROR)
+        Logger.getLogger("org").setLevel(Level.WARN)
+        Logger.getLogger("akka").setLevel(Level.WARN)
         Logger.getLogger("org.apache.spark").setLevel(Level.WARN)
-        Logger.getLogger("org.apache.spark.storage.BlockManager").setLevel(Level.ERROR)
+        Logger.getLogger("org.apache.spark.storage.BlockManager").setLevel(Level.WARN)
 
         // Not displaying any messages
         //Logger.getLogger("org").setLevel(Level.OFF)
         //Logger.getLogger("akka").setLevel(Level.OFF)
 
+
         // Spark configuration
         val sparkConf = new SparkConf(true)
             .setAppName("FindCommunities")
-            .setMaster("yarn-client")
+            //.setMaster("yarn-client")
             //.set("spark.akka.frameSize", "250")
             //.set("spark.streaming.blockInterval", "2000")
             /*.set("spark.shuffle.service.enabled", "true") // needed fo dynamicAllocation
             .set("spark.dynamicAllocation.enabled", "true")
             .set("spark.dynamicAllocation.minExecutors", "16")
-            .set("spark.dynamicAllocation.maxExecutor", "160")*/
-            //.set("spark.akka.threads", "16")
+            .set("spark.dynamicAllocation.maxExecutor", "160")
+            .set("spark.akka.threads", "16")*/
             //.set("spark.streaming.receiver.maxRate", "0") // no limit on the rate
             /*.set("spark.dynamicAllocation.enabled", "true")
             .set("spark.shuffle.service.enabled", "true")
             .set("spark.dynamicAllocation.minExecutors", "8")
             .set("spark.dynamicAllocation.maxExecutor", "640")*/
-            .set("spark.yarn.am.memory", "4g")
+            //.set("spark.yarn.am.memory", "4g")
             //.set("spark.yarn.am.cores", "4")
             //.set("spark.shuffle.consolidateFiles", "true")
-            .set("spark.io.compression.codec", "lzf") // improve shuffle performance
+            //.set("spark.io.compression.codec", "lzf") // improve shuffle performance
             //.set("spark.akka.threads", "10")
             //.set("spark.driver.cores", "8")
-           // .set("spark.driver.memory", "32g")
-            .set("spark.executor.memory", "4g")
-            .set("spark.shuffle.memoryFraction", "0.5")
+            // .set("spark.driver.memory", "32g")
+            //.set("spark.executor.memory", "4g")
+            //.set("spark.shuffle.memoryFraction", "0.5")
             .set("spark.driver.maxResultSize", "0") // no limit
             //.set("spark.executor.memory", "2g") // Amount of memory to use for the driver process
             //.set("spark.executor.memory", "2g") // Amount of memory to use per executor process
             .set("spark.cassandra.connection.host", "157.26.83.16") // Link to Cassandra
             .set("spark.cassandra.auth.username", "cassandra")
             .set("spark.cassandra.auth.password", "cassandra")
+            //.set("spark.executor.memory", "4g")
+            //.set("spark.driver.memory","1g")
             //.set("spark.cassandra.output.batch.grouping.buffer.size", "10000")
             //.set("spark.cassandra.output.concurrent.writes", "10")
             //.set("spark.cassandra.output.batch.size.bytes", "2048")
             //.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")// kryo is much faster
             //.set("spark.kryoserializer.buffer.mb", "256") // I serialize bigger objects
             //.set("spark.mesos.coarse", "true") // link provided
-            .set("spark.akka.frameSize", "1000") // workers should be able to send bigger messages
+            //.set("spark.akka.frameSize", "1000") // workers should be able to send bigger messages
             //.set("spark.executor.extraJavaOptions", "-XX:MaxPermSize=1024M -XX:+UseCompressedOops")
-            .set("spark.akka.timeout", "180")
-            .set("spark.cleaner.ttl", (BATCH_SIZE * 6).toString) // Enable meta-data cleaning in Spark (so this can run forever)
-            .set("spark.cleaner.delay", (BATCH_SIZE * 6).toString) // Enable meta-data cleaning in Spark (so this can run forever)
-            .set("spark.akka.askTimeout", "30"); // high CPU/IO load
+            //.set("spark.akka.timeout", "180")
+            .set("spark.ui.port", "4060");
+            //.set("spark.cleaner.ttl", (BATCH_SIZE * 6).toString) // Enable meta-data cleaning in Spark (so this can run forever)
+            //.set("spark.cleaner.delay", (BATCH_SIZE * 6).toString) // Enable meta-data cleaning in Spark (so this can run forever)
+            //.set("spark.rpc.askTimeout", "30"); // high CPU/IO load
 
         //sparkConf.registerKryoClasses(Array(classOf[MllibUtils]))
 
@@ -144,7 +162,7 @@ object FindCommunities {
 
 
         println("\n\n**************************************************************")
-        println("******************        FindCommunities      **************")
+        println("******************        FindCommunities      ***************")
         println("**************************************************************\n")
 
 
@@ -159,9 +177,13 @@ object FindCommunities {
         val patternURL = new Regex("(http|ftp|https)://[A-Za-z0-9-_]+.[A-Za-z0-9-_:%&?/.=]+")
         val patternSmiley = new Regex("((?::|;|=)(?:-)?(?:\\)|D|P|3|O))")
         val patternCommonWords = new Regex("\\b(that|have|with|this|from|they|would|there|their|what|about|which|when|make|like|time|just|know|take|into|year|your|good|some|could|them|other|than|then|look|only|come|over|think|also|back|after|work|first|well|even|want|because|these|give|most|http|https|fpt)\\b")
+        println("ère")
+        val sc = new SparkContext(sparkConf)
+        println("fff")
 
         // Streaming context -> batch size
         val ssc = new StreamingContext(sparkConf, Seconds(BATCH_SIZE))
+        println("yolo")
         val stream = TwitterUtils.createStream(ssc, None, words)
 
         // filter for english user only
@@ -171,7 +193,7 @@ object FindCommunities {
         val streamBatch = stream.window(Seconds(BATCH_SIZE), Seconds(BATCH_SIZE))
 
         // Init SparkContext
-        val sc = ssc.sparkContext
+        //val sc = ssc.sparkContext
 
         /**
          * LDA CREATED FROM CASSANDRA
@@ -191,7 +213,7 @@ object FindCommunities {
             val tweet = preText
                 .toLowerCase.split("\\s")
                 .filter(_.length > MIN_WORD_LENGTH)
-                .filter(_.forall(java.lang.Character.isLetter))
+                .filter(_.forall(java.lang.Character.isAlphabetic(_)))
 
             if (tweet.length > 0) {
                 for (t <- tweet) {
@@ -215,7 +237,9 @@ object FindCommunities {
         // .setOptimizer("online") // works with Apache Spark 1.4 only
 
         // Create documents for LDA
-        val (res1: RDD[(Long, Vector)], res2: Array[String], vocab: Map[String, Int]) = time { createdoc(dictRDDInit) }
+        val (res1: RDD[(Long, Vector)], res2: Array[String], vocab: Map[String, Int]) = time {
+            createdoc(dictRDDInit)
+        }
 
         dictRDDInit.unpersist()
 
@@ -480,7 +504,7 @@ object FindCommunities {
                     val tweet = preText
                         .toLowerCase.split("\\s")
                         .filter(_.length > MIN_WORD_LENGTH)
-                        .filter(_.forall(java.lang.Character.isLetter))
+                        .filter(_.forall(java.lang.Character.isAlphabetic(_)))
 
                     if (tweet.nonEmpty) {
                         for (t <- tweet) {
@@ -497,7 +521,9 @@ object FindCommunities {
             println("Create document")
             val dictRDD = sc.parallelize(dictionnary).persist(StorageLevel.MEMORY_AND_DISK)
 
-            val (res1: RDD[(Long, Vector)], res2: Array[String], vocab: Map[String, Int]) = time { createdoc (dictRDD) }
+            val (res1: RDD[(Long, Vector)], res2: Array[String], vocab: Map[String, Int]) = time {
+                createdoc(dictRDD)
+            }
 
 
             // Start LDA
@@ -505,7 +531,9 @@ object FindCommunities {
             ldaModel = lda.run(res1.persist(StorageLevel.MEMORY_AND_DISK_SER))
 
             res1.unpersist()
-            var seqC: Seq[(String, String, String, String)] = time { findTopics(ldaModel, res2, counter.toString, 0, numWordsByTopics, displayResult = true) }
+            var seqC: Seq[(String, String, String, String)] = time {
+                findTopics(ldaModel, res2, counter.toString, 0, numWordsByTopics, displayResult = true)
+            }
 
             seqC = seqC.map(a => (counter.toString, a._2, a._3, a._4))
 
@@ -554,18 +582,7 @@ object FindCommunities {
 
                     if (result.nonEmpty) {
 
-                        // Store cosine calculus
-                        //val tabcosine = new ArrayBuffer[Double]()
-
                         println("Words in current tweet: " + result.length)
-
-                        // Storage for cosines Similarity
-                        //var tab1 = new ArrayBuffer[Double]()
-                        //var tab2 = new ArrayBuffer[Double]()
-
-
-                        // Clean and Concatenate subgraph's tweets
-                        //var cccc = result.map(t => patternCommonWords.replaceAllIn(t.toLowerCase, "").toLowerCase.split("\\s").filter(_.length > MIN_WORD_LENGTH).filter(_.forall(java.lang.Character.isLetter)).mkString(" ")).toString
 
                         currentTweets = ""
                         result.foreach(x => {
@@ -575,9 +592,9 @@ object FindCommunities {
                             val tweet = preText
                                 .toLowerCase.split("\\s")
                                 .filter(_.length > MIN_WORD_LENGTH)
-                                .filter(_.forall(java.lang.Character.isLetter))
+                                .filter(_.forall(java.lang.Character.isAlphabetic(_)))
 
-                                currentTweets = currentTweets.concat(tweet.mkString(" "))
+                            currentTweets = currentTweets.concat(tweet.mkString(" "))
 
                         })
 
@@ -586,29 +603,13 @@ object FindCommunities {
                         val tabcosine: ArrayBuffer[Double] = cosineSimilarity(vocab, res2.distinct, currentTweets.split(" "))
                         println("outside cosineSimilarity")
 
-                        //res3.persist(StorageLevel.MEMORY_AND_DISK)
-
-                        /*ldaModel.describeTopics(numWordsByTopics).foreach { case (terms, termWeights) =>
-                            terms.zip(termWeights).foreach { case (term, weight) =>
-                                tab1 += res3.filter(x => x._1 == term).head._2.apply(term)
-                                //time { tab1 += res3.filter(x => x._1 == term).map(a => a._2.apply(term)).first() }
-
-                                println(res3.filter(x => x._1 == term).head._2.apply(term))
-
-                                tab2 += weight.toDouble
-                            }
-
-                            // Store every cosine similarity
-                            tabcosine += cosineSimilarity(tab1, tab2)
-                        }*/
-
                         // Pour chaques edges . On crée un Seq qui contient le futur record pour cassandra
                         var seqcommunities = sub.edges.map(message => (counter.toString, verticesCount.toString, cpt.toString, commIDs(cpt).toString, message.srcId.toString, message.dstId.toString, message.attr, tabcosine.mkString(";"))).collect()
 
                         // Petit problème avec le counter qui ne se met pas a jour dans la method au dessus
                         seqcommunities = seqcommunities.map(a => (counter.toString, a._2, a._3, a._4, a._5, a._6, a._7, a._8))
 
-                        seqcommunities.foreach(println(_))
+                        //seqcommunities.foreach(println(_))
 
                         // Save to cassandra
                         sc.parallelize(seqcommunities.toSeq).saveToCassandra(
@@ -651,11 +652,11 @@ object FindCommunities {
      * @constructor murmurHash64A
      *
      *              Murmur is a family of good general purpose hashing functions, suitable for non-cryptographic usage. As stated by Austin Appleby, MurmurHash provides the following benefits:
-         *              - good distribution (passing chi-squared tests for practically all keysets & bucket sizes.
-         *              - good avalanche behavior (max bias of 0.5%).
-         *              - good collision resistance (passes Bob Jenkin's frog.c torture-test. No collisions possible for 4-byte keys, no small (1- to 7-bit) differentials).
-         *              - great performance on Intel/AMD hardware, good tradeoff between hash quality and CPU consumption.
-         *
+     *              - good distribution (passing chi-squared tests for practically all keysets & bucket sizes.
+     *              - good avalanche behavior (max bias of 0.5%).
+     *              - good collision resistance (passes Bob Jenkin's frog.c torture-test. No collisions possible for 4-byte keys, no small (1- to 7-bit) differentials).
+     *              - great performance on Intel/AMD hardware, good tradeoff between hash quality and CPU consumption.
+     *
      *              Source : http://stackoverflow.com/questions/11899616/murmurhash-what-is-it
      *
      * @param Seq[Byte] - $data
@@ -707,7 +708,7 @@ object FindCommunities {
     def cosineSimilarity(x: ArrayBuffer[Double], y: ArrayBuffer[Double]): Double = {
         require(x.length == y.length)
 
-        if(magnitude(x) == 0.0 || magnitude(y) == 0.0)
+        if (magnitude(x) == 0.0 || magnitude(y) == 0.0)
             return 0.0
 
         dotProduct(x, y) / (magnitude(x) * magnitude(y))
@@ -734,36 +735,6 @@ object FindCommunities {
     def magnitude(x: ArrayBuffer[Double]): Double = {
         math.sqrt(x map (i => i * i) sum)
     }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
     def splitCommunity(graph: Graph[String, String], users: RDD[(VertexId, (String))], NBKCORE: Int, displayResult: Boolean): Graph[String, String] = {
@@ -929,96 +900,18 @@ object FindCommunities {
     }
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     def createdoc(tokenizedCorpus: RDD[String]): ((RDD[(Long, Vector)], Array[String], Map[String, Int])) = {
 
         println(color("\nCall createdoc", RED))
 
-        // Choose the vocabulary.
-        // termCounts: Sorted list of (term, termCount) pairs
-        /*val termCounts: Array[(String, Long)] =
-            tokenizedCorpus.map(_ -> 1L).reduceByKey(_ + _).collect().sortBy(-_._2)
-
-        // vocabArray: Chosen vocab (removing common terms)
-        val numStopwords = 0
-        val vocabArray: Array[String] =
-            termCounts.takeRight(termCounts.length - numStopwords).map(_._1)
-
-        // vocab: Map term -> term index
-        val vocab: Map[String, Int] = vocabArray.zipWithIndex.toMap
-
-        //val tokenCollected = tokenizedCorpus.collect()
-
-        // count the occurrence of each word
-        //val wordCounts = tokenizedCorpus.map((_, 1)).reduceByKey(_ + _)
-
-        val counts = new mutable.HashMap[Int, Double]()
-
-
-        // MAP : [ Word ID , VECTOR [vocab.size, WordFrequency]]
-        val documents: Map[Long, Vector] = vocab.map { case (tokens, id) =>
-
-            // Word ID
-            val idx = vocab(tokens)
-
-            // Count word occurancy
-                //wordCounts.filter(_._1 == tokens).first()._2
-            counts(idx) = counts.getOrElse(idx, 0.0) + 1.0
-
-            // Return word ID and Vector
-            (id.toLong, Vectors.sparse(vocab.size, counts.toSeq))
-        }*/
-
         // Split each document into a sequence of terms (words)
         val tokenized: RDD[Seq[String]] =
-            tokenizedCorpus.map(_.toLowerCase.split("\\s")).map(_.filter(_.length > 3).filter(_.forall(java.lang.Character.isLetter)))
+            tokenizedCorpus.map(_.toLowerCase.split("\\s")).map(_.filter(_.length > 3))
 
         // Choose the vocabulary.
         //   termCounts: Sorted list of (term, termCount) pairs
         val termCounts: RDD[(String, Long)] =
-            tokenized.flatMap(_.map(_ -> 1L)).reduceByKey(_ + _).sortBy(_._2)//.collect().sortBy(-_._2)
+            tokenized.flatMap(_.map(_ -> 1L)).reduceByKey(_ + _).sortBy(_._2) //.collect().sortBy(-_._2)
 
         //   vocabArray: Chosen vocab (removing common terms)
         val vocabArray: Array[String] = termCounts.map(a => a._1).collect()
@@ -1047,7 +940,7 @@ object FindCommunities {
 
         println(color("\nCall cosineSimilarity", RED))
 
-        tokenizedTweet.foreach(println(_))
+        //tokenizedTweet.foreach(println(_))
 
         var tab1 = new ArrayBuffer[Double]()
         var tab2 = new ArrayBuffer[Double]()
@@ -1057,70 +950,17 @@ object FindCommunities {
             terms.zip(termWeights).foreach { case (term, weight) =>
 
                 tab1 += tokenizedTweet.count(_ == vocabArray(term.toInt))
-                //time { tab1 += res3.filter(x => x._1 == term).map(a => a._2.apply(term)).first() }
-
-                //println(res3.filter(x => x._1 == term).head._2.apply(term))
-
                 tab2 += weight.toDouble
 
 
-                println("mot : " + vocabArray(term.toInt) + "   tab1: " + tokenizedTweet.count(_ == vocabArray(term.toInt)) + "   tab2: " + weight.toDouble + "   word: " + vocabArray(term.toInt))
+                //println("mot : " + vocabArray(term.toInt) + "   tab1: " + tokenizedTweet.count(_ == vocabArray(term.toInt)) + "   tab2: " + weight.toDouble + "   word: " + vocabArray(term.toInt))
             }
-            println("\n\n")
+            //println("\n\n")
 
             // Store every cosine similarity
             tabcosine += cosineSimilarity(tab1, tab2)
         }
         tabcosine
-
-
-        /*val counts2 = new mutable.HashMap[Int, Double]()
-
-        val document: Map[Long, Vector] = vocab.map { case (tokens, id) =>
-
-            // Word ID
-            val idx = vocab(tokens)
-
-            val counter = tokenizedTweet.count(_ == tokens).toDouble
-
-            // Count word occurancy
-            counts2(idx) = counts2.getOrElse(idx, 0.0) + counter
-
-            // Return word ID and Vector
-            (id.toLong, Vectors.sparse(vocab.size, counts2.toSeq))
-        }*/
-
-        // Split each document into a sequence of terms (words)
-        /*val tokenized: RDD[Seq[String]] =
-            tokenizedCorpus.map(_.toLowerCase.split("\\s")).map(_.filter(_.length > 3).filter(_.forall(java.lang.Character.isLetter)))
-
-        // Choose the vocabulary.
-        //   termCounts: Sorted list of (term, termCount) pairs
-        val termCounts: RDD[(String, Long)] =
-            tokenized.flatMap(_.map(_ -> 1L)).reduceByKey(_ + _).sortBy(_._2)//.collect().sortBy(-_._2)
-
-        //   vocabArray: Chosen vocab (removing common terms)
-        val numStopwords = 0
-        val vocabArray: Array[String] = termCounts.map(a => a._1).collect()
-
-        //   vocab: Map term -> term index
-        val vocab: Map[String, Int] = vocabArray.zipWithIndex.toMap
-
-        // Convert documents into term count vectors
-        val documents: RDD[(Long, Vector)] =
-            tokenized.zipWithIndex.map { case (tokens, id) =>
-                val counts = new mutable.HashMap[Int, Double]()
-                tokens.foreach { term =>
-                    if (vocab.contains(term)) {
-                        val idx = vocab(term)
-                        counts(idx) = counts.getOrElse(idx, 0.0) + tokenizedTweet.count(_ == tokens).toDouble
-                    }
-                }
-                (id, Vectors.sparse(vocab.size, counts.toSeq))
-            }
-
-*/
-        //document.toSeq
     }
 
     /**

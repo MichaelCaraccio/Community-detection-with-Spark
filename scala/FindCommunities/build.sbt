@@ -4,18 +4,23 @@ version := "1.0"
 
 scalaVersion := "2.10.5"
 
-libraryDependencies ++= Seq(
+/*libraryDependencies ++= Seq(
     "org.apache.spark" %% "spark-core" % "1.3.0" % "provided",
     "org.apache.spark" %% "spark-graphx" % "1.3.0" % "provided",
-    //"org.apache.spark" %% "spark-streaming" % "1.3.0" % "provided",
-    "org.apache.spark" %% "spark-mllib" % "1.3.0" % "provided"//,
-    //    "org.apache.commons" % "commons-lang3" % "3.3.2",
-    /*"org.apache.spark" %% "spark-streaming-twitter" % "1.3.0"*/)
+    "org.apache.spark" %% "spark-mllib" % "1.3.0" % "provided")
 
-//libraryDependencies += "org.apache.spark" % "spark-streaming_2.10" % "1.3.0"
 libraryDependencies += "org.apache.spark" % "spark-streaming-twitter_2.10" % "1.3.0"	
 
-libraryDependencies += "com.datastax.spark" %% "spark-cassandra-connector" % "1.3.0-M1"
+libraryDependencies += "com.datastax.spark" %% "spark-cassandra-connector" % "1.3.0-M1"*/
+
+libraryDependencies ++= Seq(
+    "org.apache.spark" %% "spark-core" % "1.4.0" % "provided",
+    "org.apache.spark" %% "spark-graphx" % "1.4.0" % "provided",
+    "org.apache.spark" %% "spark-mllib" % "1.4.0" % "provided")
+
+libraryDependencies += "org.apache.spark" % "spark-streaming-twitter_2.10" % "1.4.0"	
+
+libraryDependencies += "com.datastax.spark" %% "spark-cassandra-connector" % "1.4.0-M1"
 
 //libraryDependencies += "com.google.code.gson" % "gson" % "2.3"
 
