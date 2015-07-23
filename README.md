@@ -1,1 +1,3 @@
-# TB_2015
+# Community detection and LDA 
+
+For further informations -> wiki
