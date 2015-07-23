@@ -1,12 +1,10 @@
-import org.apache.spark.SparkConf
+import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.graphx._
 import org.apache.spark.rdd.RDD
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.streaming._
 import org.apache.spark.streaming.twitter.TwitterUtils
 import utils._
-import org.apache.spark.SparkContext
-import org.apache.spark.SparkContext._
 
 import scala.collection.mutable
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
@@ -82,14 +80,14 @@ object FindCommunities {
         val topicSmoothing = 1.2
         val termSmoothing = 1.2
         val numTopics = 10
-        val numIterations = 10
+        val numIterations = 50
         val numWordsByTopics = 12
 
         // Display only error messages
-        Logger.getLogger("org").setLevel(Level.WARN)
-        Logger.getLogger("akka").setLevel(Level.WARN)
-        Logger.getLogger("org.apache.spark").setLevel(Level.WARN)
-        Logger.getLogger("org.apache.spark.storage.BlockManager").setLevel(Level.WARN)
+        Logger.getLogger("org").setLevel(Level.ERROR)
+        Logger.getLogger("akka").setLevel(Level.ERROR)
+        Logger.getLogger("org.apache.spark").setLevel(Level.ERROR)
+        Logger.getLogger("org.apache.spark.storage.BlockManager").setLevel(Level.ERROR)
 
         // Not displaying any messages
         //Logger.getLogger("org").setLevel(Level.OFF)
@@ -99,15 +97,15 @@ object FindCommunities {
         // Spark configuration
         val sparkConf = new SparkConf(true)
             .setAppName("FindCommunities")
-            //.setMaster("yarn-client")
-            //.set("spark.akka.frameSize", "250")
+            .setMaster("local[4]")
+            .set("spark.akka.frameSize", "1000")
             //.set("spark.streaming.blockInterval", "2000")
             /*.set("spark.shuffle.service.enabled", "true") // needed fo dynamicAllocation
             .set("spark.dynamicAllocation.enabled", "true")
             .set("spark.dynamicAllocation.minExecutors", "16")
             .set("spark.dynamicAllocation.maxExecutor", "160")
             .set("spark.akka.threads", "16")*/
-            //.set("spark.streaming.receiver.maxRate", "0") // no limit on the rate
+            .set("spark.streaming.receiver.maxRate", "0") // no limit on the rate
             /*.set("spark.dynamicAllocation.enabled", "true")
             .set("spark.shuffle.service.enabled", "true")
             .set("spark.dynamicAllocation.minExecutors", "8")
@@ -117,31 +115,34 @@ object FindCommunities {
             //.set("spark.shuffle.consolidateFiles", "true")
             //.set("spark.io.compression.codec", "lzf") // improve shuffle performance
             //.set("spark.akka.threads", "10")
-            //.set("spark.driver.cores", "8")
-            // .set("spark.driver.memory", "32g")
-            //.set("spark.executor.memory", "4g")
-            //.set("spark.shuffle.memoryFraction", "0.5")
+            .set("spark.task.maxFailures", "30000")
+            .set("spark.akka.timeout", "180")
+            .set("spark.network.timeout", "180")
+            .set("spark.driver.cores", "4")
+            .set("spark.driver.memory", "16g")
+            .set("spark.executor.memory", "16g")
+            .set("spark.shuffle.memoryFraction", "0.7")
             .set("spark.driver.maxResultSize", "0") // no limit
             //.set("spark.executor.memory", "2g") // Amount of memory to use for the driver process
             //.set("spark.executor.memory", "2g") // Amount of memory to use per executor process
             .set("spark.cassandra.connection.host", "157.26.83.16") // Link to Cassandra
             .set("spark.cassandra.auth.username", "cassandra")
-            .set("spark.cassandra.auth.password", "cassandra")
-            //.set("spark.executor.memory", "4g")
-            //.set("spark.driver.memory","1g")
-            //.set("spark.cassandra.output.batch.grouping.buffer.size", "10000")
-            //.set("spark.cassandra.output.concurrent.writes", "10")
-            //.set("spark.cassandra.output.batch.size.bytes", "2048")
-            //.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")// kryo is much faster
-            //.set("spark.kryoserializer.buffer.mb", "256") // I serialize bigger objects
-            //.set("spark.mesos.coarse", "true") // link provided
-            //.set("spark.akka.frameSize", "1000") // workers should be able to send bigger messages
-            //.set("spark.executor.extraJavaOptions", "-XX:MaxPermSize=1024M -XX:+UseCompressedOops")
-            //.set("spark.akka.timeout", "180")
-            .set("spark.ui.port", "4060");
-            //.set("spark.cleaner.ttl", (BATCH_SIZE * 6).toString) // Enable meta-data cleaning in Spark (so this can run forever)
-            //.set("spark.cleaner.delay", (BATCH_SIZE * 6).toString) // Enable meta-data cleaning in Spark (so this can run forever)
-            //.set("spark.rpc.askTimeout", "30"); // high CPU/IO load
+            .set("spark.cassandra.auth.password", "cassandra");
+        //.set("spark.executor.memory", "4g")
+        //.set("spark.driver.memory","1g")
+        //.set("spark.cassandra.output.batch.grouping.buffer.size", "10000")
+        //.set("spark.cassandra.output.concurrent.writes", "10")
+        //.set("spark.cassandra.output.batch.size.bytes", "2048")
+        //.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")// kryo is much faster
+        //.set("spark.kryoserializer.buffer.mb", "256") // I serialize bigger objects
+        //.set("spark.mesos.coarse", "true") // link provided
+        //.set("spark.akka.frameSize", "1000") // workers should be able to send bigger messages
+        //.set("spark.executor.extraJavaOptions", "-XX:MaxPermSize=1024M -XX:+UseCompressedOops")
+        //.set("spark.akka.timeout", "180")
+        //.set("spark.ui.port", "4060");
+        //.set("spark.cleaner.ttl", (BATCH_SIZE * 6).toString) // Enable meta-data cleaning in Spark (so this can run forever)
+        //.set("spark.cleaner.delay", (BATCH_SIZE * 6).toString) // Enable meta-data cleaning in Spark (so this can run forever)
+        //.set("spark.rpc.askTimeout", "30"); // high CPU/IO load
 
         //sparkConf.registerKryoClasses(Array(classOf[MllibUtils]))
 
@@ -177,13 +178,10 @@ object FindCommunities {
         val patternURL = new Regex("(http|ftp|https)://[A-Za-z0-9-_]+.[A-Za-z0-9-_:%&?/.=]+")
         val patternSmiley = new Regex("((?::|;|=)(?:-)?(?:\\)|D|P|3|O))")
         val patternCommonWords = new Regex("\\b(that|have|with|this|from|they|would|there|their|what|about|which|when|make|like|time|just|know|take|into|year|your|good|some|could|them|other|than|then|look|only|come|over|think|also|back|after|work|first|well|even|want|because|these|give|most|http|https|fpt)\\b")
-        println("ère")
-        val sc = new SparkContext(sparkConf)
-        println("fff")
 
         // Streaming context -> batch size
         val ssc = new StreamingContext(sparkConf, Seconds(BATCH_SIZE))
-        println("yolo")
+
         val stream = TwitterUtils.createStream(ssc, None, words)
 
         // filter for english user only
@@ -193,7 +191,7 @@ object FindCommunities {
         val streamBatch = stream.window(Seconds(BATCH_SIZE), Seconds(BATCH_SIZE))
 
         // Init SparkContext
-        //val sc = ssc.sparkContext
+        val sc = ssc.sparkContext
 
         /**
          * LDA CREATED FROM CASSANDRA
@@ -234,7 +232,7 @@ object FindCommunities {
             .setDocConcentration(topicSmoothing)
             .setTopicConcentration(termSmoothing)
             .setMaxIterations(numIterations)
-        // .setOptimizer("online") // works with Apache Spark 1.4 only
+            .setOptimizer("online") // works with Apache Spark 1.4 only
 
         // Create documents for LDA
         val (res1: RDD[(Long, Vector)], res2: Array[String], vocab: Map[String, Int]) = time {
@@ -444,7 +442,7 @@ object FindCommunities {
                 stockGraph = Graph(stockGraph.vertices.union(sc.parallelize(collectionVertices)), stockGraph.edges.union(sc.parallelize(collectionEdge)))
             }
 
-            println("TOTAL EDGES : " + stockGraph.edges.count())
+            //println("TOTAL EDGES : " + stockGraph.edges.count())
             //println("TOTAL VERTICES : " + stockGraph.vertices.count())
 
             collectionVertices = new ArrayBuffer[(Long, String)]()
@@ -473,7 +471,7 @@ object FindCommunities {
 
             communityGraph.cache()
 
-            val (subgraphs, commIDs) = time {
+            var (subgraphs, commIDs) = time {
                 subgraphCommunities(communityGraph, stockGraph.vertices, displayResult = false)
             }
 
@@ -483,19 +481,25 @@ object FindCommunities {
              * LDA
              */
 
+            println("AVANT : "+subgraphs.length)
+            // We only care about subgraph bigger than MIN_VERTICES_PER_COMMUNITIES
+            subgraphs = time { subgraphs.filter(_.vertices.count() >= MIN_VERTICES_PER_COMMUNITIES ) }
+            println("APRES : "+subgraphs.length)
+
+
             currentTweets = ""
             for (i <- subgraphs.indices) {
                 // Timer
                 //val t0 = System.nanoTime()
 
                 // Current subgraph
-                val sub = subgraphs(i).cache()
+                //val sub = subgraphs(i).cache()
 
-                val edges = sub.edges.collect()
+                //val edges = subgraphs(i).edges.collect()
 
                 // Messages will be stored in an array
-                val result = edges.map(message => textBuffer.getOrElse(message.attr.toLong, "").replaceAll("[!?.,:;<>)(]", " "))
-                sub.unpersist()
+                val result = subgraphs(i).edges.collect().map(message => textBuffer.getOrElse(message.attr.toLong, "").replaceAll("[!?.,:;<>)(]", " "))
+                //sub.unpersist()
 
                 result.foreach(x => {
 
@@ -567,9 +571,9 @@ object FindCommunities {
 
                 val verticesCount = sub.vertices.count()
 
-                if (verticesCount < MIN_VERTICES_PER_COMMUNITIES) {
+                /*if (verticesCount < MIN_VERTICES_PER_COMMUNITIES) {
                     println("Stop here : < " + MIN_VERTICES_PER_COMMUNITIES + " users")
-                } else {
+                } else {*/
                     println("Number of users in community : " + verticesCount)
 
                     // Messages will be stored in an array
@@ -629,7 +633,7 @@ object FindCommunities {
                     }
 
                     cpt += 1
-                }
+                //}
 
                 val t1 = System.nanoTime()
                 println("SubGraph N°: " + cpt + " processed in " + (t1 - t0) / 1000000000.0 + " seconds")
