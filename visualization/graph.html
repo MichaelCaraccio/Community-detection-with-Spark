@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<style>
+
+    html, body { height: 99%;
+        margin:0;
+        width: 99%;
+        height:100%;
+    }
+
+    .node {
+        stroke: #fff;
+        stroke-width: 1.5px;
+    }
+
+    .link {
+        stroke: #999;
+        stroke-opacity: .6;
+    }
+    text {
+        font: 24px "Helvetica Neue", Helvetica, Arial, sans-serif;
+        text-anchor: middle;
+        pointer-events: none;
+    }
+    .node:hover circle {
+        fill: orange;
+    }
+
+
+    #wrapper{
+        margin:0;
+        height: 100%;
+    }
+    #right{
+        float:right;
+        width:26%;
+        overflow-y:auto;
+        padding-right:2%;
+        padding-left:2%;
+        height:100%;
+        max-width: 26%;
+        overflow-x: hidden;
+    }
+    #graph{
+        float:left;
+        width:70%;
+        height:100%;
+        overflow:hidden;
+    } 
+    #infos{
+        float:left;
+        width:100%;
+        overflow:hidden;
+    } 
+
+    #tip{
+  position:absolute;
+  top: 15px;
+    left: 15px;
+}
+</style>
+<link rel="stylesheet" href="d3.slider.css" /> 
+<body>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/3.5.5/d3.min.js" charset="utf-8"></script>
+    <script src="//code.jquery.com/jquery-1.11.3.min.js"></script>
+    <script src="d3.slider.js"></script>
+
+    <div id="wrapper">
+
+        <div id="tip">Click on a node for further infos.</div>
+        <svg id="graph" ></svg>
+
+
+        <div id="right" style="background-color:#ECF0F1;">
+
+            <div >
+                <h4>GRAPH STATISTICS</h4>
+                Total communities : <a id="totalcommunities"></a><br>
+                Total nodes : <a id="totalnodes"></a>
+            </div>
+
+
+            <br>
+            <div id ="statcom">
+                <h4>COMMUNITY STATISTICS</h4>
+                Users : <a id="numNodes"></a><br>
+                Messages : <a id="numMessages"></a>
+            </div>
+
+            <div>
+                <h4>PERIOD: <span id="slider4text">1</span></h4>
+                <div id="slider4" style="margin:0!important;padding:0!important;"></div>
+            </div>
+
+            <div>
+                <br><br>
+                <h4>MIN. NODES PER COMMUNITIES: <span id="slidermintext">0</span></h4>
+                <h5>0 = no restriction</h5>
+                <div id="slidermin" style="margin:0!important;padding:0!important;"></div>
+            </div>
+            <br>
+            
+            <h4 id="titleLDA">RESULT FOR LDA</h4>
+            <div id="lda">
+
+
+            </div>
+        </div>
+    </div>
+
+
+
+
+
+
+    <script>
+
+        var width = screen.width / 1.32,
+            height = screen.width/ 2;
+
+        var tValue = 1;
+        var minVerticeValue = 0;
+
+        var color = d3.scale.category20();
+
+        var force = d3.layout.force()
+        .charge(-20)
+        .linkDistance(15)
+        .size([width, height]);
+
+        var svg = d3.select("#graph");
+
+
+        $( "button" ).click(function() {
+            $( "#lda" ).slideToggle( "fast" );
+        });
+
+
+
+        // ////////////////////////////////////////////////////////////
+        // Count each nodes per groups
+        // ////////////////////////////////////////////////////////////
+        function replaceAll(find, replace, str) {
+            return str.replace(new RegExp(find, 'g'), replace);
+        }
+
+        // ////////////////////////////////////////////////////////////
+        // Count each nodes per groups
+        // ////////////////////////////////////////////////////////////
+        function clickOnNode(d){
+
+            document.getElementById('statcom').style.display = 'block';
+            document.getElementById('titleLDA').style.display = 'block';
+            document.getElementById('lda').style.display = 'block';
+
+            var mapLDA = new Map();
+            var mapLDASorted = new Map();
+            var arrayCosines = [];
+            var arrayWords = [];
+            var count = 0;
+
+            var nodesnames = [];
+
+            for (i = 0; i < dataCosines.length; i++) {
+
+                if(dataCosines[i].sg == d.sg){
+                    arrayCosines = dataCosines[i].cosines.split(";");
+                    count = count +1;
+                    for (k = 0; k < datasetLDA.length; k++) {
+                        arrayWords.push(datasetLDA[k].words);
+                    }
+                }
+            }
+
+
+
+
+            // ********************************************************
+            // COUNT AND DISPLAY TOTAL EDGES AND VERTICES
+            // ********************************************************
+
+            var anumnodes = document.getElementById('numNodes');
+            var anummessages = document.getElementById('numMessages');
+
+            for (i = 0; i < datasetNode.length; i++) {
+                if (datasetNode[i].sg == d.sg){
+                    nodesnames.push(datasetNode[i].name);
+                }
+            }
+
+            var uniqueArray = nodesnames.filter(function(elem, pos) {
+                return nodesnames.indexOf(elem) == pos;
+            });
+
+
+            anumnodes.innerHTML = uniqueArray.length;
+            anummessages.innerHTML = count;
+
+
+            // Until cosines array length and not arrayCosines
+            for (i = 0; i < arrayCosines.length; i++) {
+                mapLDA.set(parseFloat(arrayCosines[i]), arrayWords[i])
+            }
+
+            var keys = [];
+            mapLDA.forEach(function(a,b,c){
+                keys.push(b);
+            });
+
+            sorted = keys.sort().reverse();
+            for(w = 0; w < sorted.length; w++){
+                mapLDASorted.set(sorted[w],mapLDA.get(sorted[w]));
+            }
+
+            var div = document.getElementById('lda');
+            div.innerHTML = "";
+
+            var cpt = 1;
+            mapLDASorted.forEach(function (item, key, mapObj) {
+                div.innerHTML = div.innerHTML + "<b>Topic N°" + cpt + " (" + key + ")" + "<br>Words : </b>" + replaceAll(";", " ",  item) + "<br><br>" ;
+                cpt++;
+            });
+        }
+        // ////////////////////////////////////////////////////////////
+        // Count each nodes per groups
+        // ////////////////////////////////////////////////////////////
+        function onlyUnique(value, index, self) { 
+            return self.indexOf(value) === index;
+        }
+
+
+        // ////////////////////////////////////////////////////////////
+        // Count each nodes per groups
+        // ////////////////////////////////////////////////////////////
+        function logMapElements(valeur, clé, map) {
+            console.log("m[" + clé + "] = " + valeur);
+        }
+
+        // ////////////////////////////////////////////////////////////
+        // Count each nodes per groups
+        // ////////////////////////////////////////////////////////////
+        function getKeys(valeur, clé, map) {
+            clé;
+        }
+
+
+        // ////////////////////////////////////////////////////////////
+        // Count each nodes per groups
+        // ////////////////////////////////////////////////////////////
+        function countNodesPerGroup(graph){
+
+            // List of groups
+            var GroupList = [];
+
+            for (i = 0; i < graph.nodes.length; i++) {
+                GroupList[i] = graph.nodes[i].group
+            }
+
+            // List of unique groups
+            var uniqueGroups = GroupList.filter( onlyUnique );
+
+            // ********************************************************
+            // Count each nodes per groups
+            // ********************************************************
+
+            var nodesPerGroups = new Map();
+
+            // Init nodesPerGroups
+            for (i = 0; i < uniqueGroups.length; i++) {
+                nodesPerGroups.set(uniqueGroups[i], 0);
+            }
+
+            // Count nodes per groups and store them in nodesPerGroups
+            for (i = 0; i < graph.nodes.length; i++) {
+                var key = graph.nodes[i].group;                
+                nodesPerGroups.set(key, nodesPerGroups.get(key) + 1);
+            }
+
+            return nodesPerGroups;
+        }
+
+        // TODO : lorsque l'on clique sur un node, alors va interoger bdd et prendre info de l'utilisateur
+
+        function displayData(graph){
+
+            var OriginalMap = countNodesPerGroup(graph);
+
+            datasetLDA = graph.lda
+            dataCosines = graph.cosine
+            datasetNode = graph.nodes
+
+            document.getElementById('statcom').style.display = 'none';
+            document.getElementById('titleLDA').style.display = 'none';
+            document.getElementById('lda').style.display = 'none';
+            // ********************************************************
+            // COUNT COMMUNITIES AND NODES IN GRAPH
+            // ********************************************************
+
+            var atotalnodes = document.getElementById('totalnodes');
+            atotalnodes.innerHTML = graph.nodes.length;
+
+            arrayGroups = [];
+
+            for (i = 0; i < graph.nodes.length; i++) {
+                arrayGroups.push(graph.nodes[i].group);
+            }
+
+
+            var uniqueArray = arrayGroups.filter(function(elem, pos) {
+                return arrayGroups.indexOf(elem) == pos;
+            });
+
+            var atotalcommunities = document.getElementById('totalcommunities');
+            atotalcommunities.innerHTML = uniqueArray.length;
+
+
+
+
+
+            console.log("LINKS: " + graph.links.length)
+            console.log("LDA: " + graph.lda.length)
+            console.log("COSINES: " + graph.cosine.length)
+
+            force
+                .nodes(graph.nodes)
+                .links(graph.links)
+                .start();
+
+            var link = svg.selectAll(".link")
+            .data(graph.links)
+            .enter().append("line")
+            .attr("class", "link")
+            .style("stroke-width", function(d) { return Math.sqrt(d.value); });
+
+            //OriginalMap.forEach(logMapElements);
+
+            var node = svg.selectAll(".node")
+            .data(graph.nodes)
+            .enter()
+            .append("circle")
+            .attr("class", "node")
+            //.attr("r", function(d) { return Math.sqrt(OriginalMap.get(d.group))*2; })
+            .attr("r", function(d) { return 4; })
+            //.attr("text-anchor", "middle").text(function(d) { return d.name; })
+            .style("fill", function(d) { return color(d.group); })
+            .call(force.drag)
+            .on("click", function(d) {  clickOnNode(d); } );
+
+            node.append("title")
+                .text(function(d) { return d.name; });
+
+            force.on("tick", function() {
+                link.attr("x1", function(d) { return d.source.x; })
+                    .attr("y1", function(d) { return d.source.y; })
+                    .attr("x2", function(d) { return d.target.x; })
+                    .attr("y2", function(d) { return d.target.y; });
+
+                node.attr("cx", function(d) { return d.x; })
+                    .attr("cy", function(d) { return d.y; });
+            });
+        }
+
+
+        function getNewData() {
+            d3.json("data.php?value=" +tValue + "&minVertices=" + minVerticeValue, function(error, graph) {
+                var div = document.getElementById('lda');
+
+                div.innerHTML = "";
+
+
+                svg.selectAll(".link").remove();
+                svg.selectAll(".node").remove();
+
+                displayData(graph);
+            });
+        }
+
+        d3.select('#slider4').call(d3.slider().axis(true).min(1).max(30).step(1).on("slide", function(evt, value) {
+            d3.select('#slider4text').text(value);
+            tValue = value;
+            getNewData();
+        }));
+
+        d3.select('#slidermin').call(d3.slider().axis(true).min(0).max(500).step(5).on("slide", function(evt, value) {
+            d3.select('#slidermintext').text(value);
+            minVerticeValue = value
+            getNewData();
+        }));
+
+        d3.json("data.php", function(error, graph) {
+            if (error) throw error;
+
+            displayData(graph);
+        });
+
+    </script>
