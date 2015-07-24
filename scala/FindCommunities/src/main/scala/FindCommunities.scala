@@ -1,3 +1,8 @@
+// /////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//  Author              : Michael Caraccio
+//  Project title       : Détection et analyse de communauté Twitter
+// /////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 import org.apache.spark.SparkConf
 import org.apache.spark.graphx._
 import org.apache.spark.rdd.RDD
@@ -12,19 +17,15 @@ import scala.math._
 import scala.reflect.ClassTag
 
 //Log4J
-
 import org.apache.log4j.{Level, Logger}
 
 // Cassandra
-
 import com.datastax.spark.connector._
 
 // Regex
-
 import scala.util.matching.Regex
 
 // MLlib
-
 import org.apache.spark.mllib.clustering.{LDA, _}
 import org.apache.spark.mllib.linalg.{Vector, Vectors}
 
@@ -35,35 +36,25 @@ object FindCommunities {
     // CONSTANT
     // /////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-    var MIN_VERTICES_PER_COMMUNITIES = 6
-    // Limit - Minimum vertices per communities
-    var MIN_WORD_LENGTH = 3
-    // Minimum word length in tweet
-    var NBKCORE = 6
-    // Number of core - K Core Decomposition algorithm
-    var BATCH_SIZE = 900
-    // Batch size (in seconds)
-    var CLEAN_GRAPH_MOD = 4
-    // Clean stockGraph every CLEAN_GRAPH_MOD
-    var CLEAN_GRAPH_NBKCORE = 2 // When clean graph is called, k-core decomposition is called
+    var MIN_VERTICES_PER_COMMUNITIES = 6            // Limit - Minimum vertices per communities
+    var MIN_WORD_LENGTH = 3                         // Minimum word length in tweet
+    var NBKCORE = 6                                 // Number of core - K Core Decomposition algorithm
+    var BATCH_SIZE = 900                            // Batch size (in seconds)
+    var CLEAN_GRAPH_MOD = 4                         // Clean stockGraph every CLEAN_GRAPH_MOD
+    var CLEAN_GRAPH_NBKCORE = 2                     // When clean graph is called, k-core decomposition is called
 
-    val defaultSeed = 0xadc83b19L // Seed for murmurhash - Do not change this value
+    val defaultSeed = 0xadc83b19L                   // Seed for murmurhash - Do not change this value
 
-    var dictionnary = new ArrayBuffer[String]()
-    // Store tweets
-    var ldaModel: LDAModel = null
-    // LDA Model
-    var lda: LDA = null
-    // LDA object
-    var stockGraph: Graph[String, String] = null
-    // Store every edges and vertices received by Twitter
+    var dictionnary = new ArrayBuffer[String]()     // Store tweets
+    var ldaModel: LDAModel = null                   // LDA Model
+    var lda: LDA = null                             // LDA object
+    var stockGraph: Graph[String, String] = null    // Store every edges and vertices received by Twitter
     var currentTweets: String = ""
-    // Current tweet received
-    var counter = 1
 
-    val RED = "\033[1;30m"
-    // Terminal color RED
-    val ENDC = "\033[0m" // Terminal end character
+    var counter = 1                                 // Perid
+
+    val RED = "\033[1;30m"                          // Terminal color RED
+    val ENDC = "\033[0m"                            // Terminal end character
 
 
     def color(str: String, col: String): String = "%s%s%s".format(col, str, ENDC)
@@ -92,22 +83,7 @@ object FindCommunities {
             .setAppName("FindCommunities")
             .setMaster("local[4]")
             .set("spark.akka.frameSize", "1000")
-            //.set("spark.streaming.blockInterval", "2000")
-            /*.set("spark.shuffle.service.enabled", "true") // needed fo dynamicAllocation
-            .set("spark.dynamicAllocation.enabled", "true")
-            .set("spark.dynamicAllocation.minExecutors", "16")
-            .set("spark.dynamicAllocation.maxExecutor", "160")
-            .set("spark.akka.threads", "16")*/
             .set("spark.streaming.receiver.maxRate", "0") // no limit on the rate
-            /*.set("spark.dynamicAllocation.enabled", "true")
-            .set("spark.shuffle.service.enabled", "true")
-            .set("spark.dynamicAllocation.minExecutors", "8")
-            .set("spark.dynamicAllocation.maxExecutor", "640")*/
-            //.set("spark.yarn.am.memory", "4g")
-            //.set("spark.yarn.am.cores", "4")
-            //.set("spark.shuffle.consolidateFiles", "true")
-            //.set("spark.io.compression.codec", "lzf") // improve shuffle performance
-            //.set("spark.akka.threads", "10")
             .set("spark.task.maxFailures", "30000")
             .set("spark.akka.timeout", "180")
             .set("spark.network.timeout", "180")
@@ -116,30 +92,9 @@ object FindCommunities {
             .set("spark.executor.memory", "16g")
             .set("spark.shuffle.memoryFraction", "0.7")
             .set("spark.driver.maxResultSize", "0") // no limit
-            //.set("spark.executor.memory", "2g") // Amount of memory to use for the driver process
-            //.set("spark.executor.memory", "2g") // Amount of memory to use per executor process
             .set("spark.cassandra.connection.host", "157.26.83.16") // Link to Cassandra
             .set("spark.cassandra.auth.username", "cassandra")
             .set("spark.cassandra.auth.password", "cassandra");
-        //.set("spark.executor.memory", "4g")
-        //.set("spark.driver.memory","1g")
-        //.set("spark.cassandra.output.batch.grouping.buffer.size", "10000")
-        //.set("spark.cassandra.output.concurrent.writes", "10")
-        //.set("spark.cassandra.output.batch.size.bytes", "2048")
-        //.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")// kryo is much faster
-        //.set("spark.kryoserializer.buffer.mb", "256") // I serialize bigger objects
-        //.set("spark.mesos.coarse", "true") // link provided
-        //.set("spark.akka.frameSize", "1000") // workers should be able to send bigger messages
-        //.set("spark.executor.extraJavaOptions", "-XX:MaxPermSize=1024M -XX:+UseCompressedOops")
-        //.set("spark.akka.timeout", "180")
-        //.set("spark.ui.port", "4060");
-        //.set("spark.cleaner.ttl", (BATCH_SIZE * 6).toString) // Enable meta-data cleaning in Spark (so this can run forever)
-        //.set("spark.cleaner.delay", (BATCH_SIZE * 6).toString) // Enable meta-data cleaning in Spark (so this can run forever)
-        //.set("spark.rpc.askTimeout", "30"); // high CPU/IO load
-
-        //sparkConf.registerKryoClasses(Array(classOf[MllibUtils]))
-
-        //.set("spark.executor.extraJavaOptions", "-XX:MaxPermSize=512M -XX:+UseCompressedOops")
 
         // Set the system properties so that Twitter4j library used by twitter stream
         // can use them to generate OAuth credentials
@@ -150,8 +105,6 @@ object FindCommunities {
         System.setProperty("twitter4j.http.connectionTimeout", "200000")
         System.setProperty("twitter4j.http.retryCount", "30")
         System.setProperty("twitter4j.http.retryIntervalSecs", "2")
-        //System.setProperty("twitter4j.async.numThreads", "1")
-
 
 
 
@@ -221,7 +174,7 @@ object FindCommunities {
             .setOptimizer("online") // works with Apache Spark 1.4 only
 
         // Create documents for LDA
-        val (res1: RDD[(Long, Vector)], res2: Array[String], vocab: Map[String, Int]) = time {
+        val (res1: RDD[(Long, Vector)], vocab: Map[String, Int]) = time {
             createdoc(dictRDDInit)
         }
 
@@ -239,7 +192,9 @@ object FindCommunities {
 
 
 
-
+        // /////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        // STREAM OBJECT
+        // /////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
         // Stream about users
@@ -253,7 +208,6 @@ object FindCommunities {
             status.getUser.getScreenName,
             status.getUser.getStatusesCount.toString)
         }
-
 
         // Stream about communication between two users
         val commStream = streamBatch.map { status => (
@@ -280,9 +234,6 @@ object FindCommunities {
             status.getText
             )
         }
-
-
-
 
 
         // /////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -493,7 +444,7 @@ object FindCommunities {
             println("Create document")
             val dictRDD = sc.parallelize(dictionnary).persist(StorageLevel.MEMORY_AND_DISK)
 
-            val (res1: RDD[(Long, Vector)], res2: Array[String], vocab: Map[String, Int]) = time {
+            val (res1: RDD[(Long, Vector)], vocab: Map[String, Int]) = time {
                 createdoc(dictRDD)
             }
 
@@ -504,7 +455,7 @@ object FindCommunities {
 
             res1.unpersist()
             var seqC: Seq[(String, String, String, String)] = time {
-                findTopics(ldaModel, res2, counter.toString, 0, numWordsByTopics, displayResult = true)
+                findTopics(ldaModel, dictionnary.toArray, counter.toString, 0, numWordsByTopics, displayResult = true)
             }
 
             seqC = seqC.map(a => (counter.toString, a._2, a._3, a._4))
@@ -569,7 +520,7 @@ object FindCommunities {
 
 
                     println("Call cosineSimilarity")
-                    val tabcosine: ArrayBuffer[Double] = cosineSimilarity(vocab, res2.distinct, currentTweets.split(" "))
+                    val tabcosine: ArrayBuffer[Double] = cosineSimilarity(vocab, dictionnary.toArray.distinct, currentTweets.split(" "))
                     println("outside cosineSimilarity")
 
                     // Pour chaques edges . On crée un Seq qui contient le futur record pour cassandra
@@ -804,6 +755,22 @@ object FindCommunities {
         Pregel(graph, 0)(vProg, sendMsg, mergeMsg)
     }
 
+
+    /**
+     * SubGraphCommunities is used to find communities in a graph
+     *
+     * Steps :
+     *      1. Connected Compoenents
+     *      2. Collect subgraphs id's
+     *      3. Add subgraph to array
+     *      4. Return array of communities
+     *
+     * @param graph the graph for which to compute the connected components
+     * @param users RDD containing users - used to associate edges and vertices
+     * @param boolean displayResult
+     *
+     * @return an Array of graph (which contains subgraph) and communities ids
+     */
     def subgraphCommunities(graph: Graph[String, String], users: RDD[(VertexId, (String))], displayResult: Boolean): (Array[Graph[String, String]], Array[Long]) = {
 
         println(color("\nCall subgraphCommunities", RED))
@@ -849,8 +816,22 @@ object FindCommunities {
         (result, collectIDsCommunity)
     }
 
-
-    def createdoc(tokenizedCorpus: RDD[String]): ((RDD[(Long, Vector)], Array[String], Map[String, Int])) = {
+    /**
+     * CreateDoc generate document for LDA
+     *
+     * Steps :
+     *      1. Get tweets
+     *      2. Split into sequences
+     *      3. Counts terms occurency
+     *      4. Create vocab array with unique words
+     *      5. Create documents (RDD) containing vector and word id
+     *
+     * @param RDD tweets
+     *
+     * @return documents (RDD) ready to use
+     *         array of tweets
+     */
+    def createdoc(tokenizedCorpus: RDD[String]): ((RDD[(Long, Vector)], Map[String, Int])) = {
 
         println(color("\nCall createdoc", RED))
 
@@ -882,7 +863,7 @@ object FindCommunities {
                 (id, Vectors.sparse(vocab.size, counts.toSeq))
             }
 
-        (documents, tokenizedCorpus.collect(), vocab)
+        (documents, vocab)
     }
 
 
