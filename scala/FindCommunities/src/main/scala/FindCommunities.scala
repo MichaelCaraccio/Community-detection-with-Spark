@@ -1,4 +1,4 @@
-import org.apache.spark.{SparkConf, SparkContext}
+import org.apache.spark.SparkConf
 import org.apache.spark.graphx._
 import org.apache.spark.rdd.RDD
 import org.apache.spark.storage.StorageLevel
@@ -71,10 +71,8 @@ object FindCommunities {
 
     def main(args: Array[String]) {
 
-        //val comUtils = new CommunityUtils   // Community methods
         val ru = new RDDUtils // Manipulate RDD class
         val tc = new TwitterConfig // Login and password for Twitter
-        //val mu = new MllibUtils()           // LDA class
 
         // LDA parameters
         val topicSmoothing = 1.2
@@ -88,11 +86,6 @@ object FindCommunities {
         Logger.getLogger("akka").setLevel(Level.ERROR)
         Logger.getLogger("org.apache.spark").setLevel(Level.ERROR)
         Logger.getLogger("org.apache.spark.storage.BlockManager").setLevel(Level.ERROR)
-
-        // Not displaying any messages
-        //Logger.getLogger("org").setLevel(Level.OFF)
-        //Logger.getLogger("akka").setLevel(Level.OFF)
-
 
         // Spark configuration
         val sparkConf = new SparkConf(true)
@@ -166,11 +159,6 @@ object FindCommunities {
         println("******************        FindCommunities      ***************")
         println("**************************************************************\n")
 
-
-
-
-
-
         val words = Array(" @") // Filters tweet stream by words
 
         // Pattern used to find users and filter tweets
@@ -217,8 +205,6 @@ object FindCommunities {
                 for (t <- tweet) {
                     dictionnary += t
                 }
-
-                //currentTweets = currentTweets.concat(tweet.mkString(" "))
             }
         })
 
@@ -240,11 +226,6 @@ object FindCommunities {
         }
 
         dictRDDInit.unpersist()
-
-        println("Distinct words : " + dictionnary.distinct.size)
-
-        //res1.persist(StorageLevel.MEMORY_AND_DISK)
-        //res1.partitions(1000)
 
         if (!res1.isEmpty()) {
             // Start LDA
@@ -276,9 +257,9 @@ object FindCommunities {
 
         // Stream about communication between two users
         val commStream = streamBatch.map { status => (
-            status.getId, //tweet_id
-            status.getUser.getId.toString, // user_send_twitter_ID
-            status.getUser.getScreenName, // user_send_name
+            status.getId,
+            status.getUser.getId.toString,
+            status.getUser.getScreenName,
             if (pattern.findFirstIn(status.getText).isEmpty) {
                 ""
             }
@@ -442,9 +423,6 @@ object FindCommunities {
                 stockGraph = Graph(stockGraph.vertices.union(sc.parallelize(collectionVertices)), stockGraph.edges.union(sc.parallelize(collectionEdge)))
             }
 
-            //println("TOTAL EDGES : " + stockGraph.edges.count())
-            //println("TOTAL VERTICES : " + stockGraph.vertices.count())
-
             collectionVertices = new ArrayBuffer[(Long, String)]()
             collectionEdge = new ArrayBuffer[Edge[String]]()
 
@@ -481,25 +459,17 @@ object FindCommunities {
              * LDA
              */
 
-            println("AVANT : "+subgraphs.length)
             // We only care about subgraph bigger than MIN_VERTICES_PER_COMMUNITIES
-            subgraphs = time { subgraphs.filter(_.vertices.count() >= MIN_VERTICES_PER_COMMUNITIES ) }
-            println("APRES : "+subgraphs.length)
+            subgraphs = time {
+                subgraphs.filter(_.vertices.count() >= MIN_VERTICES_PER_COMMUNITIES)
+            }
 
 
             currentTweets = ""
             for (i <- subgraphs.indices) {
-                // Timer
-                //val t0 = System.nanoTime()
-
-                // Current subgraph
-                //val sub = subgraphs(i).cache()
-
-                //val edges = subgraphs(i).edges.collect()
 
                 // Messages will be stored in an array
                 val result = subgraphs(i).edges.collect().map(message => textBuffer.getOrElse(message.attr.toLong, "").replaceAll("[!?.,:;<>)(]", " "))
-                //sub.unpersist()
 
                 result.foreach(x => {
 
@@ -514,8 +484,6 @@ object FindCommunities {
                         for (t <- tweet) {
                             dictionnary += t
                         }
-
-                        //currentTweets = currentTweets.concat(tweet.mkString(" "))
                     }
                 })
             }
@@ -571,69 +539,64 @@ object FindCommunities {
 
                 val verticesCount = sub.vertices.count()
 
-                /*if (verticesCount < MIN_VERTICES_PER_COMMUNITIES) {
-                    println("Stop here : < " + MIN_VERTICES_PER_COMMUNITIES + " users")
-                } else {*/
-                    println("Number of users in community : " + verticesCount)
+                println("Number of users in community : " + verticesCount)
 
-                    // Messages will be stored in an array
-                    val result = sub.edges.collect().map(message => textBuffer.getOrElse(message.attr.toLong, "").replaceAll("[!?.,:;<>)(]", " "))
+                // Messages will be stored in an array
+                val result = sub.edges.collect().map(message => textBuffer.getOrElse(message.attr.toLong, "").replaceAll("[!?.,:;<>)(]", " "))
 
-                    /**
-                     * If there's a new tweet in a community -> LDA
-                     */
+                /**
+                 * If there's a new tweet in a community -> LDA
+                 */
 
 
-                    if (result.nonEmpty) {
+                if (result.nonEmpty) {
 
-                        println("Words in current tweet: " + result.length)
+                    println("Words in current tweet: " + result.length)
 
-                        currentTweets = ""
-                        result.foreach(x => {
+                    currentTweets = ""
+                    result.foreach(x => {
 
-                            val preText = patternCommonWords.replaceAllIn(x.toLowerCase, "")
+                        val preText = patternCommonWords.replaceAllIn(x.toLowerCase, "")
 
-                            val tweet = preText
-                                .toLowerCase.split("\\s")
-                                .filter(_.length > MIN_WORD_LENGTH)
-                                .filter(_.forall(java.lang.Character.isAlphabetic(_)))
+                        val tweet = preText
+                            .toLowerCase.split("\\s")
+                            .filter(_.length > MIN_WORD_LENGTH)
+                            .filter(_.forall(java.lang.Character.isAlphabetic(_)))
 
-                            currentTweets = currentTweets.concat(tweet.mkString(" "))
+                        currentTweets = currentTweets.concat(tweet.mkString(" "))
 
-                        })
+                    })
 
 
-                        println("Call cosineSimilarity")
-                        val tabcosine: ArrayBuffer[Double] = cosineSimilarity(vocab, res2.distinct, currentTweets.split(" "))
-                        println("outside cosineSimilarity")
+                    println("Call cosineSimilarity")
+                    val tabcosine: ArrayBuffer[Double] = cosineSimilarity(vocab, res2.distinct, currentTweets.split(" "))
+                    println("outside cosineSimilarity")
 
-                        // Pour chaques edges . On crée un Seq qui contient le futur record pour cassandra
-                        var seqcommunities = sub.edges.map(message => (counter.toString, verticesCount.toString, cpt.toString, commIDs(cpt).toString, message.srcId.toString, message.dstId.toString, message.attr, tabcosine.mkString(";"))).collect()
+                    // Pour chaques edges . On crée un Seq qui contient le futur record pour cassandra
+                    var seqcommunities = sub.edges.map(message => (counter.toString, verticesCount.toString, cpt.toString, commIDs(cpt).toString, message.srcId.toString, message.dstId.toString, message.attr, tabcosine.mkString(";"))).collect()
 
-                        // Petit problème avec le counter qui ne se met pas a jour dans la method au dessus
-                        seqcommunities = seqcommunities.map(a => (counter.toString, a._2, a._3, a._4, a._5, a._6, a._7, a._8))
+                    // Petit problème avec le counter qui ne se met pas a jour dans la method au dessus
+                    seqcommunities = seqcommunities.map(a => (counter.toString, a._2, a._3, a._4, a._5, a._6, a._7, a._8))
 
-                        //seqcommunities.foreach(println(_))
+                    // Save to cassandra
+                    sc.parallelize(seqcommunities.toSeq).saveToCassandra(
+                        "twitter",
+                        "communities",
+                        SomeColumns("t",
+                            "nbv",
+                            "sg",
+                            "com_id",
+                            "src_id",
+                            "dst_id",
+                            "attr",
+                            "lda"
+                        ))
+                } else {
+                    println("LDA wont process current document because it does not contains any words")
+                }
 
-                        // Save to cassandra
-                        sc.parallelize(seqcommunities.toSeq).saveToCassandra(
-                            "twitter",
-                            "communities",
-                            SomeColumns("t",
-                                "nbv",
-                                "sg",
-                                "com_id",
-                                "src_id",
-                                "dst_id",
-                                "attr",
-                                "lda"
-                            ))
-                    } else {
-                        println("LDA wont process current document because it does not contains any words")
-                    }
+                cpt += 1
 
-                    cpt += 1
-                //}
 
                 val t1 = System.nanoTime()
                 println("SubGraph N°: " + cpt + " processed in " + (t1 - t0) / 1000000000.0 + " seconds")
@@ -781,21 +744,6 @@ object FindCommunities {
 
         val v = g.vertices.filter { case (vid, vd) => vd >= kmin }.cache()
 
-        // Display informations
-        if (displayResult) {
-            val degrees = graph.degrees
-            val numVertices = degrees.count()
-            val testK = kmin
-            val vCount = g.vertices.filter { case (vid, vd) => vd >= kmin }.count()
-            val eCount = g.triplets.map { t => t.srcAttr >= testK && t.dstAttr >= testK }.count()
-
-            /*logWarning(s"Number of vertices: $numVertices")
-            logWarning(s"Degree sample: ${degrees.take(10).mkString(", ")}")
-            logWarning(s"Degree distribution: " + degrees.map { case (vid, data) => (data, 1) }.reduceByKey(_ + _).collect().mkString(", "))
-            logWarning(s"Degree distribution: " + degrees.map { case (vid, data) => (data, 1) }.reduceByKey(_ + _).take(10).mkString(", "))
-            logWarning(s"K=$kmin, V=$vCount, E=$eCount")*/
-        }
-
         // Create new RDD users
         val newUser = users.join(v).map {
             case (id, (username, rank)) => (id, username)
@@ -871,11 +819,9 @@ object FindCommunities {
             case (id, (username, cci)) => (id, username, cci)
         }.cache()
 
-        // Print the result
         val lowerIDPerCommunity = ccByUsername.map { case (id, username, cci) => cci }.distinct().cache()
 
         // Result will be stored in an array
-        //var result = new ArrayBuffer[Graph[String, String]]()
         println("--------------------------")
         println("Total community found: " + lowerIDPerCommunity.count())
         println("--------------------------")
@@ -944,8 +890,6 @@ object FindCommunities {
 
         println(color("\nCall cosineSimilarity", RED))
 
-        //tokenizedTweet.foreach(println(_))
-
         var tab1 = new ArrayBuffer[Double]()
         var tab2 = new ArrayBuffer[Double]()
         var tabcosine = new ArrayBuffer[Double]()
@@ -955,11 +899,7 @@ object FindCommunities {
 
                 tab1 += tokenizedTweet.count(_ == vocabArray(term.toInt))
                 tab2 += weight.toDouble
-
-
-                //println("mot : " + vocabArray(term.toInt) + "   tab1: " + tokenizedTweet.count(_ == vocabArray(term.toInt)) + "   tab2: " + weight.toDouble + "   word: " + vocabArray(term.toInt))
             }
-            //println("\n\n")
 
             // Store every cosine similarity
             tabcosine += cosineSimilarity(tab1, tab2)
@@ -977,7 +917,7 @@ object FindCommunities {
      * @param Int $numWordsByTopics -
      * @param Boolean $displayResult - Display result in console
      *
-     * @return LDAModel
+     * @return Seq
      */
     def findTopics(ldaModel: LDAModel, vocabArray: Array[String], T: String, SG: Int, numWordsByTopics: Int, displayResult: Boolean): Seq[(String, String, String, String)] = {
 
